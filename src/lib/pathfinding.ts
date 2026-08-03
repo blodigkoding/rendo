@@ -63,6 +63,21 @@ const toWorld = (grid: NavGrid, index: number): Vec2 => ({
   y: (Math.floor(index / grid.cols) + 0.5) * grid.cell,
 });
 
+export function cellIndex(grid: NavGrid, p: Vec2): number {
+  const { i, j } = toCell(grid, p);
+  return j * grid.cols + i;
+}
+
+export function cellCentre(grid: NavGrid, index: number): Vec2 {
+  return toWorld(grid, index);
+}
+
+/** Nærmeste punkt man faktisk kan stå på, eller null hvis alt rundt er sperret. */
+export function snapToWalkable(grid: NavGrid, p: Vec2): Vec2 | null {
+  const index = nearestFree(grid, cellIndex(grid, p));
+  return index === null ? null : toWorld(grid, index);
+}
+
 /** Nærmeste frie rute – brukes når brukeren treffer en hylle med fingeren. */
 function nearestFree(grid: NavGrid, index: number): number | null {
   if (grid.blocked[index] === 0) return index;

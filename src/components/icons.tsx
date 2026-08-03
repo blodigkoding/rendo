@@ -88,6 +88,26 @@ export const TurnRightIcon = ({ size = 16 }: IconProps) => (
   </svg>
 );
 
+export const CheckIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)} strokeWidth={2} aria-hidden="true">
+    <path d="M5 12.5l4.5 4.5L19 7" />
+  </svg>
+);
+
+export const ListIcon = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <path d="M9 6.5h11M9 12h11M9 17.5h11" />
+    <path d="M4 6.5h.01M4 12h.01M4 17.5h.01" strokeWidth={2} />
+  </svg>
+);
+
+export const PlusCircleIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <circle cx="12" cy="12" r="8.6" />
+    <path d="M12 8.4v7.2M8.4 12h7.2" />
+  </svg>
+);
+
 export const CubeIcon = ({ size = 16 }: IconProps) => (
   <svg {...base(size)} aria-hidden="true">
     <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" />

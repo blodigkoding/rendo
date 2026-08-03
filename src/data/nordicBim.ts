@@ -34,11 +34,14 @@ export function createNordicBimSource(config: NordicBimConfig): RetailDataSource
 
   return {
     name: 'nordic-bim',
+    listChains: notImplemented('listChains'),
+    getChain: notImplemented('getChain'),
     searchStores: notImplemented('searchStores'),
     getStore: notImplemented('getStore'),
     getStorePlan: notImplemented('getStorePlan'),
     searchProducts: notImplemented('searchProducts'),
     getProduct: notImplemented('getProduct'),
     getProductsInFixture: notImplemented('getProductsInFixture'),
+    getProductsInDepartment: notImplemented('getProductsInDepartment'),
   };
 }

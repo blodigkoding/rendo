@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { DeviceFrame } from './components/DeviceFrame';
 import { HomePage } from './components/HomePage';
 import { StorePage } from './components/StorePage';
 
@@ -23,17 +24,13 @@ export function App() {
   const [path, navigate] = useHashRoute();
   const storeMatch = /^\/butikk\/([^/]+)$/.exec(path);
 
-  if (storeMatch) {
-    return (
-      <div className="app">
-        <StorePage storeId={storeMatch[1]} onBack={() => navigate('/')} />
-      </div>
-    );
-  }
-
   return (
-    <div className="app">
-      <HomePage onOpenStore={(storeId) => navigate(`/butikk/${storeId}`)} />
-    </div>
+    <DeviceFrame>
+      {storeMatch ? (
+        <StorePage key={storeMatch[1]} storeId={storeMatch[1]} onBack={() => navigate('/')} />
+      ) : (
+        <HomePage onOpenStore={(storeId) => navigate(`/butikk/${storeId}`)} />
+      )}
+    </DeviceFrame>
   );
 }

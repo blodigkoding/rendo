@@ -1,22 +1,7 @@
-import type { Fixture, Product } from '../types';
-import { DEMO_PLAN } from './plan';
+import type { CatalogItem } from './catalog';
 
-/**
- * Demo-vareutvalg. Hvert produkt får en planogram-plassering ved at det
- * fordeles utover reolseksjonene i sin egen avdeling – deterministisk, slik at
- * plasseringen er den samme mellom økter.
- */
-
-interface CatalogItem {
-  name: string;
-  brand: string;
-  price: number;
-  unit: string;
-  dept: string;
-  keywords?: string[];
-}
-
-const CATALOG: CatalogItem[] = [
+/** Dagligvareutvalget. Rema og Extra deler dette, med hver sine priser. */
+export const GROCERY_CATALOG: CatalogItem[] = [
   // Frukt & grønt
   { name: 'Bananer', brand: 'Chiquita', price: 24.9, unit: 'kg', dept: 'frukt', keywords: ['frukt'] },
   { name: 'Epler Royal Gala', brand: 'Bama', price: 34.9, unit: 'kg', dept: 'frukt', keywords: ['frukt', 'eple'] },
@@ -123,69 +108,3 @@ const CATALOG: CatalogItem[] = [
   { name: 'Kattemat 12 pk', brand: 'Whiskas', price: 119.0, unit: 'pk', dept: 'dyr', keywords: ['katt'] },
   { name: 'Kattesand 10 l', brand: 'Catsan', price: 139.0, unit: 'pk', dept: 'dyr', keywords: ['katt'] },
 ];
-
-/** Enkel deterministisk hash, brukt til å fordele varer på hyllenivå. */
-function hash(input: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < input.length; i++) {
-    h ^= input.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return Math.abs(h);
-}
-
-function shelfHeightCm(fixture: Fixture, level: number): number {
-  const bottom = 20;
-  const spacing = (fixture.heightCm - bottom) / fixture.levels;
-  return Math.round((bottom + (level - 1) * spacing) / 5) * 5;
-}
-
-function buildProducts(): Product[] {
-  const byDept = new Map<string, Fixture[]>();
-  for (const fixture of DEMO_PLAN.fixtures) {
-    const list = byDept.get(fixture.departmentId) ?? [];
-    list.push(fixture);
-    byDept.set(fixture.departmentId, list);
-  }
-
-  const counters = new Map<string, number>();
-  const products: Product[] = [];
-
-  CATALOG.forEach((item, index) => {
-    const fixtures = byDept.get(item.dept);
-    if (!fixtures || fixtures.length === 0) return;
-
-    const n = counters.get(item.dept) ?? 0;
-    counters.set(item.dept, n + 1);
-
-    // Fordel varene jevnt utover avdelingens seksjoner.
-    const fixture = fixtures[(n * 3) % fixtures.length];
-    const seed = hash(item.name);
-    // Vekt mot midten av reolen – slik varer faktisk plasseres.
-    const levelBias = [2, 3, 3, 4, 2, 4, 1, 5];
-    const level = Math.min(fixture.levels, levelBias[seed % levelBias.length]);
-
-    products.push({
-      id: `pr-${String(index + 1).padStart(3, '0')}`,
-      name: item.name,
-      brand: item.brand,
-      ean: `70${String(3800000000 + seed % 199999999).slice(0, 11)}`,
-      price: item.price,
-      unit: item.unit,
-      departmentId: item.dept,
-      stock: 4 + (seed % 40),
-      keywords: item.keywords ?? [],
-      placement: {
-        fixtureId: fixture.id,
-        level,
-        heightCm: shelfHeightCm(fixture, level),
-        facings: 2 + (seed % 4),
-        offsetCm: 10 + (seed % 5) * 35,
-      },
-    });
-  });
-
-  return products;
-}
-
-export const DEMO_PRODUCTS: Product[] = buildProducts();

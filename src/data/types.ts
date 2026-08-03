@@ -22,9 +22,31 @@ export interface Rect {
   d: number;
 }
 
+/**
+ * Kjeden butikken tilhører. Gir appen akkurat nok merkevare til at man kjenner
+ * seg igjen – en aksentfarge og et navnetrekk – uten at resten av grensesnittet
+ * forlater det hvite uttrykket.
+ */
+export interface Chain {
+  id: string;
+  name: string;
+  /** Aksentfarge, brukt på navnetrekk, skillelinje og hovedknapp. */
+  accent: string;
+  /** Tekstfarge oppå aksentfargen. */
+  onAccent: string;
+  /** Hvordan navnetrekket settes. */
+  wordmark: {
+    text: string;
+    letterSpacing: string;
+    weight: number;
+    italic?: boolean;
+  };
+}
+
 export interface Store {
   id: string;
   name: string;
+  chainId: string;
   chain: string;
   address: string;
   postalCode: string;
@@ -96,6 +118,12 @@ export interface Product {
   stock: number;
   /** Ekstra søkeord (synonymer, kategori). */
   keywords: string[];
+  /**
+   * Produktfoto. Fylles av bildekilden når den finnes – legg filer i
+   * `src/assets/produkter/` med EAN eller varenavn som filnavn. Uten bilde
+   * tegner appen emballasjen som strek i stedet.
+   */
+  imageUrl?: string;
 }
 
 export interface Entrance {

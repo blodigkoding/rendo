@@ -3,14 +3,19 @@ import type { Fixture, StorePlan, Vec2 } from '../data/types';
 import { FACING_VECTOR, rectCenter } from '../lib/geometry';
 import { MinusIcon, PlusIcon } from './icons';
 
-/** Den valgte varens plassering, slik kartene trenger den. */
+/** En vare kartet skal peke ut. Handlelista gir flere om gangen. */
 export interface MapTarget {
+  id: string;
   fixture: Fixture;
   /** Punktet på reolfronten der varen står. */
   marker: Vec2;
   departmentId: string;
   /** Hyllens høyde over gulv. */
   heightCm: number;
+  /** Nummer i handleruten, hvis det er flere stopp. */
+  stop?: number;
+  /** Allerede plukket. */
+  done?: boolean;
 }
 
 /** Piksler i kartflaten som er dekket av søkefelt og panel. */
@@ -22,7 +27,7 @@ export interface MapInsets {
 
 export interface MapViewProps {
   plan: StorePlan;
-  target: MapTarget | null;
+  targets: MapTarget[];
   route: Vec2[] | null;
   origin: Vec2 | null;
   picking: boolean;
@@ -103,7 +108,10 @@ function useAnnotations(plan: StorePlan) {
   }, [plan]);
 }
 
-export function Map2D({ plan, target, route, origin, picking, insets, onPick }: MapViewProps) {
+export function Map2D({ plan, targets, route, origin, picking, insets, onPick }: MapViewProps) {
+  const targetFixtures = useMemo(() => new Set(targets.map((t) => t.fixture.id)), [targets]);
+  const targetDepartments = useMemo(() => new Set(targets.map((t) => t.departmentId)), [targets]);
+  const hasTargets = targets.length > 0;
   const hostRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -111,9 +119,20 @@ export function Map2D({ plan, target, route, origin, picking, insets, onPick }: 
   const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, k: 20 });
   const { aisleLabels, deptLabels } = useAnnotations(plan);
 
-  // Peker-tilstand for panorering og pinch.
+  // Peker-tilstand for panorering, pinch, treghet og dobbelttrykk.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
-  const gesture = useRef({ moved: 0, startX: 0, startY: 0, pinchDist: 0 });
+  const gesture = useRef({
+    moved: 0,
+    pinchDist: 0,
+    pinchX: 0,
+    pinchY: 0,
+    velocityX: 0,
+    velocityY: 0,
+    lastTime: 0,
+    lastTapTime: 0,
+    lastTapX: 0,
+    lastTapY: 0,
+  });
 
   useEffect(() => {
     const host = hostRef.current;
@@ -130,9 +149,66 @@ export function Map2D({ plan, target, route, origin, picking, insets, onPick }: 
   const insetsRef = useRef(insets);
   insetsRef.current = insets;
 
+  const transformRef = useRef(transform);
+  transformRef.current = transform;
+
+  /**
+   * iPhone-rammen kan være skalert ned. Peker-koordinater kommer i skjermpiksler,
+   * så de må deles på skaleringen før de blir kartkoordinater.
+   */
+  const frameScale = useCallback(() => {
+    const host = hostRef.current;
+    if (!host || host.clientWidth === 0) return 1;
+    return host.getBoundingClientRect().width / host.clientWidth;
+  }, []);
+
+  // Myk overgang mellom to utsnitt – kartet skal aldri hoppe.
+  const animation = useRef<number | null>(null);
+
+  const stopAnimation = useCallback(() => {
+    if (animation.current !== null) {
+      cancelAnimationFrame(animation.current);
+      animation.current = null;
+    }
+  }, []);
+
+  const animateTo = useCallback(
+    (to: Transform) => {
+      stopAnimation();
+      const from = transformRef.current;
+      const distance = Math.hypot(to.x - from.x, to.y - from.y);
+      if (distance < 1 && Math.abs(Math.log(to.k / from.k)) < 0.01) {
+        setTransform(to);
+        return;
+      }
+      const duration = 460;
+      const started = performance.now();
+      const step = (now: number) => {
+        const p = Math.min(1, (now - started) / duration);
+        const e = 1 - Math.pow(1 - p, 3);
+        setTransform({
+          x: from.x + (to.x - from.x) * e,
+          y: from.y + (to.y - from.y) * e,
+          // Zoom interpoleres logaritmisk, ellers føles den ujevn.
+          k: Math.exp(Math.log(from.k) + (Math.log(to.k) - Math.log(from.k)) * e),
+        });
+        animation.current = p < 1 ? requestAnimationFrame(step) : null;
+      };
+      animation.current = requestAnimationFrame(step);
+    },
+    [stopAnimation],
+  );
+
+  useEffect(() => stopAnimation, [stopAnimation]);
+
   /** Sentrerer et område i den delen av kartet som faktisk er synlig. */
   const fitTo = useCallback(
-    (box: { x: number; y: number; w: number; d: number }, padding = 40, maxK = MAX_K) => {
+    (
+      box: { x: number; y: number; w: number; d: number },
+      padding = 40,
+      maxK = MAX_K,
+      immediate = false,
+    ) => {
       const { w, h } = sizeRef.current;
       if (w === 0 || h === 0) return;
       const { top, right, bottom } = insetsRef.current;
@@ -141,13 +217,19 @@ export function Map2D({ plan, target, route, origin, picking, insets, onPick }: 
       const k = Math.max(MIN_K, Math.min(Math.min(availableW / box.w, availableH / box.d), maxK));
       const centreX = (w - right) / 2;
       const centreY = top + (h - top - bottom) / 2;
-      setTransform({
+      const next = {
         k,
         x: centreX - (box.x + box.w / 2) * k,
         y: centreY - (box.y + box.d / 2) * k,
-      });
+      };
+      if (immediate) {
+        stopAnimation();
+        setTransform(next);
+      } else {
+        animateTo(next);
+      }
     },
-    [],
+    [animateTo, stopAnimation],
   );
 
   // Første tilpasning: hele planen.
@@ -155,11 +237,12 @@ export function Map2D({ plan, target, route, origin, picking, insets, onPick }: 
   useEffect(() => {
     if (fitted.current || size.w === 0) return;
     fitted.current = true;
-    fitTo({ x: 0, y: 0, w: plan.width, d: plan.depth }, 28, 40);
+    fitTo({ x: 0, y: 0, w: plan.width, d: plan.depth }, 20, 40, true);
   }, [size.w, plan, fitTo]);
 
-  // Zoom til ruten når den finnes, ellers til valgt vare.
+  // Zoom til ruten når den finnes, ellers til de valgte varene.
   const routeKey = route ? `${route.length}:${route[0]?.x},${route[0]?.y}` : '';
+  const targetKey = targets.map((t) => t.id).join(',');
   useEffect(() => {
     if (size.w === 0) return;
     if (route && route.length > 1) {
@@ -175,39 +258,97 @@ export function Map2D({ plan, target, route, origin, picking, insets, onPick }: 
         44,
         34,
       );
-    } else if (target) {
-      fitTo({ x: target.marker.x - 6, y: target.marker.y - 6, w: 12, d: 12 }, 40, 34);
+    } else if (targets.length === 1) {
+      const { marker } = targets[0];
+      fitTo({ x: marker.x - 6, y: marker.y - 6, w: 12, d: 12 }, 34, 34);
+    } else if (targets.length > 1) {
+      const xs = targets.map((t) => t.marker.x);
+      const ys = targets.map((t) => t.marker.y);
+      fitTo(
+        {
+          x: Math.min(...xs) - 2.5,
+          y: Math.min(...ys) - 2.5,
+          w: Math.max(3, Math.max(...xs) - Math.min(...xs) + 5),
+          d: Math.max(3, Math.max(...ys) - Math.min(...ys) + 5),
+        },
+        34,
+        30,
+      );
     }
-  }, [routeKey, target?.fixture.id, size.w, insets.right, insets.bottom, fitTo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [routeKey, targetKey, size.w, insets.right, insets.bottom, fitTo]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Skjermkoordinat → punkt i kartflaten, uavhengig av rammens skalering. */
+  const toLocal = useCallback(
+    (clientX: number, clientY: number) => {
+      const rect = svgRef.current!.getBoundingClientRect();
+      const scale = frameScale();
+      return { x: (clientX - rect.left) / scale, y: (clientY - rect.top) / scale };
+    },
+    [frameScale],
+  );
 
   const toWorld = useCallback(
     (clientX: number, clientY: number): Vec2 => {
-      const rect = svgRef.current!.getBoundingClientRect();
+      const local = toLocal(clientX, clientY);
       return {
-        x: (clientX - rect.left - transform.x) / transform.k,
-        y: (clientY - rect.top - transform.y) / transform.k,
+        x: (local.x - transform.x) / transform.k,
+        y: (local.y - transform.y) / transform.k,
       };
     },
-    [transform],
+    [toLocal, transform],
   );
 
-  const zoomAt = useCallback((factor: number, cx: number, cy: number) => {
-    setTransform((t) => {
-      const k = Math.min(MAX_K, Math.max(MIN_K, t.k * factor));
-      const scale = k / t.k;
-      return { k, x: cx - (cx - t.x) * scale, y: cy - (cy - t.y) * scale };
-    });
-  }, []);
+  const zoomAt = useCallback(
+    (factor: number, cx: number, cy: number) => {
+      stopAnimation();
+      setTransform((t) => {
+        const k = Math.min(MAX_K, Math.max(MIN_K, t.k * factor));
+        const scale = k / t.k;
+        return { k, x: cx - (cx - t.x) * scale, y: cy - (cy - t.y) * scale };
+      });
+    },
+    [stopAnimation],
+  );
+
+  /** Panorering med treghet – slipper man mens fingeren er i bevegelse, glir kartet ut. */
+  const glide = useCallback(
+    (vx: number, vy: number) => {
+      stopAnimation();
+      let velocityX = vx;
+      let velocityY = vy;
+      let last = performance.now();
+      const step = (now: number) => {
+        const dt = Math.min(32, now - last);
+        last = now;
+        velocityX *= Math.pow(0.94, dt / 16);
+        velocityY *= Math.pow(0.94, dt / 16);
+        setTransform((t) => ({ ...t, x: t.x + velocityX * dt, y: t.y + velocityY * dt }));
+        if (Math.hypot(velocityX, velocityY) > 0.015) {
+          animation.current = requestAnimationFrame(step);
+        } else {
+          animation.current = null;
+        }
+      };
+      animation.current = requestAnimationFrame(step);
+    },
+    [stopAnimation],
+  );
 
   const onPointerDown = (event: React.PointerEvent) => {
+    stopAnimation();
     (event.target as Element).setPointerCapture?.(event.pointerId);
     pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     gesture.current.moved = 0;
-    gesture.current.startX = event.clientX;
-    gesture.current.startY = event.clientY;
+    gesture.current.velocityX = 0;
+    gesture.current.velocityY = 0;
+    gesture.current.lastTime = performance.now();
+
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
       gesture.current.pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+      gesture.current.pinchX = (a.x + b.x) / 2;
+      gesture.current.pinchY = (a.y + b.y) / 2;
+      gesture.current.moved = 99; // to fingre er aldri et trykk
     }
   };
 
@@ -216,37 +357,98 @@ export function Map2D({ plan, target, route, origin, picking, insets, onPick }: 
     if (!previous) return;
     const next = { x: event.clientX, y: event.clientY };
     pointers.current.set(event.pointerId, next);
+    const scale = frameScale();
 
+    // To fingre: zoom om midtpunktet, og flytt kartet med midtpunktet.
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const midX = (a.x + b.x) / 2;
+      const midY = (a.y + b.y) / 2;
+
       if (gesture.current.pinchDist > 0) {
-        const rect = svgRef.current!.getBoundingClientRect();
-        zoomAt(dist / gesture.current.pinchDist, (a.x + b.x) / 2 - rect.left, (a.y + b.y) / 2 - rect.top);
+        const local = toLocal(midX, midY);
+        const panX = (midX - gesture.current.pinchX) / scale;
+        const panY = (midY - gesture.current.pinchY) / scale;
+        setTransform((t) => {
+          const k = Math.min(MAX_K, Math.max(MIN_K, (t.k * dist) / gesture.current.pinchDist));
+          const factor = k / t.k;
+          return {
+            k,
+            x: local.x - (local.x - t.x) * factor + panX,
+            y: local.y - (local.y - t.y) * factor + panY,
+          };
+        });
       }
+
       gesture.current.pinchDist = dist;
-      gesture.current.moved = 99;
+      gesture.current.pinchX = midX;
+      gesture.current.pinchY = midY;
       return;
     }
 
-    const dx = next.x - previous.x;
-    const dy = next.y - previous.y;
+    const dx = (next.x - previous.x) / scale;
+    const dy = (next.y - previous.y) / scale;
     gesture.current.moved += Math.abs(dx) + Math.abs(dy);
     if (gesture.current.moved > 4) {
+      const now = performance.now();
+      const dt = Math.max(1, now - gesture.current.lastTime);
+      gesture.current.velocityX = dx / dt;
+      gesture.current.velocityY = dy / dt;
+      gesture.current.lastTime = now;
       setTransform((t) => ({ ...t, x: t.x + dx, y: t.y + dy }));
     }
   };
 
   const onPointerUp = (event: React.PointerEvent) => {
-    const wasTap = gesture.current.moved <= 4 && pointers.current.size === 1;
+    const wasSingle = pointers.current.size === 1;
+    const wasTap = gesture.current.moved <= 4 && wasSingle;
     pointers.current.delete(event.pointerId);
     if (pointers.current.size < 2) gesture.current.pinchDist = 0;
-    if (wasTap && picking) onPick(toWorld(event.clientX, event.clientY));
+
+    if (wasTap) {
+      const now = performance.now();
+      const isDoubleTap =
+        !picking &&
+        now - gesture.current.lastTapTime < 300 &&
+        Math.hypot(event.clientX - gesture.current.lastTapX, event.clientY - gesture.current.lastTapY) < 30;
+
+      gesture.current.lastTapTime = now;
+      gesture.current.lastTapX = event.clientX;
+      gesture.current.lastTapY = event.clientY;
+
+      if (picking) {
+        onPick(toWorld(event.clientX, event.clientY));
+      } else if (isDoubleTap) {
+        // Dobbelttrykk zoomer inn mot punktet, som i Kart.
+        const local = toLocal(event.clientX, event.clientY);
+        const t = transformRef.current;
+        const k = Math.min(MAX_K, t.k * 2);
+        const factor = k / t.k;
+        animateTo({ k, x: local.x - (local.x - t.x) * factor, y: local.y - (local.y - t.y) * factor });
+      }
+      return;
+    }
+
+    if (wasSingle && Math.hypot(gesture.current.velocityX, gesture.current.velocityY) > 0.25) {
+      glide(gesture.current.velocityX, gesture.current.velocityY);
+    }
   };
 
   const onWheel = (event: React.WheelEvent) => {
-    const rect = svgRef.current!.getBoundingClientRect();
-    zoomAt(Math.exp(-event.deltaY * 0.0016), event.clientX - rect.left, event.clientY - rect.top);
+    const local = toLocal(event.clientX, event.clientY);
+    zoomAt(Math.exp(-event.deltaY * 0.0016), local.x, local.y);
+  };
+
+  /** Knappezoom mot midten av det synlige kartet, animert. */
+  const zoomStep = (factor: number) => {
+    const { w, h } = sizeRef.current;
+    const cx = (w - insets.right) / 2;
+    const cy = insets.top + (h - insets.top - insets.bottom) / 2;
+    const t = transformRef.current;
+    const k = Math.min(MAX_K, Math.max(MIN_K, t.k * factor));
+    const scale = k / t.k;
+    animateTo({ k, x: cx - (cx - t.x) * scale, y: cy - (cy - t.y) * scale });
   };
 
   const routePath = route && route.length > 1 ? route.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(' ') : null;
@@ -290,13 +492,13 @@ export function Map2D({ plan, target, route, origin, picking, insets, onPick }: 
 
           {/* reolseksjoner */}
           {plan.fixtures.map((fixture) => {
-            const isTarget = target?.fixture.id === fixture.id;
-            const inDept = target && fixture.departmentId === target.departmentId;
+            const isTarget = targetFixtures.has(fixture.id);
+            const inDept = targetDepartments.has(fixture.departmentId);
             const className = isTarget
               ? 'plan__fixture plan__fixture--target'
               : inDept
                 ? 'plan__fixture plan__fixture--dept'
-                : target
+                : hasTargets
                   ? 'plan__fixture plan__fixture--dim'
                   : 'plan__fixture';
 
@@ -343,7 +545,7 @@ export function Map2D({ plan, target, route, origin, picking, insets, onPick }: 
               textAnchor="middle"
               dominantBaseline="middle"
               transform={label.vertical ? `rotate(-90 ${label.x} ${label.y})` : undefined}
-              opacity={target && target.departmentId !== label.id ? 0.35 : 1}
+              opacity={hasTargets && !targetDepartments.has(label.id) ? 0.3 : 1}
             >
               {label.name}
             </text>
@@ -414,38 +616,43 @@ export function Map2D({ plan, target, route, origin, picking, insets, onPick }: 
             </g>
           )}
 
-          {/* varens plassering */}
-          {target && (
-            <g>
-              <circle cx={target.marker.x} cy={target.marker.y} r={0.5} fill="#fff" />
-              <circle className="plan__pin" cx={target.marker.x} cy={target.marker.y} r={0.3} />
+          {/* varenes plassering */}
+          {targets.map((item) => (
+            <g key={item.id} className={item.done ? 'plan__target plan__target--done' : 'plan__target'}>
+              <circle cx={item.marker.x} cy={item.marker.y} r={0.92} fill="#fff" />
               <circle
-                cx={target.marker.x}
-                cy={target.marker.y}
-                r={0.75}
-                fill="none"
-                stroke="#0b0b0c"
-                strokeWidth={0.05}
-                opacity={0.5}
+                className="plan__pin"
+                cx={item.marker.x}
+                cy={item.marker.y}
+                r={item.stop ? 0.72 : 0.34}
+              />
+              {item.stop && (
+                <text
+                  className="plan__pin-label"
+                  x={item.marker.x}
+                  y={item.marker.y}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                >
+                  {item.stop}
+                </text>
+              )}
+              <circle
+                className="plan__pin-ring"
+                cx={item.marker.x}
+                cy={item.marker.y}
+                r={item.stop ? 1.05 : 0.78}
               />
             </g>
-          )}
+          ))}
         </g>
       </svg>
 
-      <div className="map__zoom" style={{ right: 12 + insets.right, bottom: 20 + insets.bottom }}>
-        <button
-          type="button"
-          aria-label="Zoom inn"
-          onClick={() => zoomAt(1.35, size.w / 2, size.h / 2)}
-        >
+      <div className="map__zoom" style={{ right: 12 + insets.right, bottom: 16 + insets.bottom }}>
+        <button type="button" aria-label="Zoom inn" onClick={() => zoomStep(1.6)}>
           <PlusIcon />
         </button>
-        <button
-          type="button"
-          aria-label="Zoom ut"
-          onClick={() => zoomAt(1 / 1.35, size.w / 2, size.h / 2)}
-        >
+        <button type="button" aria-label="Zoom ut" onClick={() => zoomStep(1 / 1.6)}>
           <MinusIcon />
         </button>
       </div>

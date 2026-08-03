@@ -13,14 +13,18 @@ const SHELF = '#ededef';
 const SHELF_DIM = '#f5f5f6';
 const EDGE = '#c6c6cb';
 
-function Fixtures({ plan, target }: { plan: StorePlan; target: MapTarget | null }) {
+function Fixtures({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) {
+  const targetFixtures = new Set(targets.map((t) => t.fixture.id));
+  const targetDepartments = new Set(targets.map((t) => t.departmentId));
+  const hasTargets = targets.length > 0;
+
   return (
     <group>
       {plan.fixtures.map((fixture) => {
-        const isTarget = target?.fixture.id === fixture.id;
-        const inDept = target && fixture.departmentId === target.departmentId;
+        const isTarget = targetFixtures.has(fixture.id);
+        const inDept = targetDepartments.has(fixture.departmentId);
         const height = fixture.heightCm / 100;
-        const color = isTarget ? INK : inDept ? '#e2e2e5' : target ? SHELF_DIM : SHELF;
+        const color = isTarget ? INK : inDept ? '#e2e2e5' : hasTargets ? SHELF_DIM : SHELF;
         return (
           <mesh
             key={fixture.id}
@@ -172,6 +176,7 @@ function TargetMarker({ target }: { target: MapTarget }) {
       </mesh>
       <Html position={[0, height + 0.55, 0]} center distanceFactor={22} zIndexRange={[2, 0]}>
         <div className="scene__label scene__label--target">
+          {target.stop ? `${target.stop} · ` : ''}
           {target.fixture.code} · {Math.round(target.heightCm)} cm
         </div>
       </Html>
@@ -185,11 +190,11 @@ function TargetMarker({ target }: { target: MapTarget }) {
  */
 function CameraRig({
   plan,
-  target,
+  targets,
   route,
 }: {
   plan: StorePlan;
-  target: MapTarget | null;
+  targets: MapTarget[];
   route: Vec2[] | null;
 }) {
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
@@ -198,23 +203,33 @@ function CameraRig({
   const desiredPosition = useRef(new THREE.Vector3(plan.width / 2, 26, plan.depth + 20));
 
   useEffect(() => {
-    if (route && route.length > 1) {
+    const framePoints = (points: Vec2[], minReach: number) => {
       const box = new THREE.Box3();
-      route.forEach((p) => box.expandByPoint(new THREE.Vector3(p.x, 0, p.y)));
+      points.forEach((p) => box.expandByPoint(new THREE.Vector3(p.x, 0, p.y)));
       const centre = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
-      // Korte ruter skal ikke gi et kamera som klistrer seg inntil hylla.
-      const reach = Math.max(size.x, size.z, 14);
+      const reach = Math.max(size.x, size.z, minReach);
       desiredTarget.current.set(centre.x, 0.8, centre.z);
       desiredPosition.current.set(centre.x, reach * 0.95 + 6, centre.z + reach * 0.9 + 8);
-    } else if (target) {
-      desiredTarget.current.set(target.marker.x, 1.2, target.marker.y);
-      desiredPosition.current.set(target.marker.x + 3, 9, target.marker.y + 12);
+    };
+
+    if (route && route.length > 1) {
+      // Korte ruter skal ikke gi et kamera som klistrer seg inntil hylla.
+      framePoints(route, 14);
+    } else if (targets.length === 1) {
+      const { marker } = targets[0];
+      desiredTarget.current.set(marker.x, 1.2, marker.y);
+      desiredPosition.current.set(marker.x + 3, 9, marker.y + 12);
+    } else if (targets.length > 1) {
+      framePoints(
+        targets.map((t) => t.marker),
+        14,
+      );
     } else {
       desiredTarget.current.set(plan.width / 2, 0, plan.depth / 2);
       desiredPosition.current.set(plan.width / 2, 26, plan.depth + 20);
     }
-  }, [plan, target, route]);
+  }, [plan, targets, route]);
 
   useFrame((_, delta) => {
     const lerp = Math.min(1, delta * 2.6);
@@ -237,7 +252,7 @@ function CameraRig({
   );
 }
 
-export function Map3D({ plan, target, route, origin, picking, insets, onPick }: MapViewProps) {
+export function Map3D({ plan, targets, route, origin, picking, insets, onPick }: MapViewProps) {
   return (
     <div className={`map${picking ? ' map--picking' : ''}`}>
       <Canvas
@@ -254,12 +269,14 @@ export function Map3D({ plan, target, route, origin, picking, insets, onPick }: 
         <Floor plan={plan} picking={picking} onPick={onPick} />
         <Perimeter plan={plan} />
         <Checkouts plan={plan} />
-        <Fixtures plan={plan} target={target} />
+        <Fixtures plan={plan} targets={targets} />
         {route && route.length > 1 && <Route route={route} />}
         {origin && <OriginMarker origin={origin} />}
-        {target && <TargetMarker target={target} />}
+        {targets.map((item) => (
+          <TargetMarker key={item.id} target={item} />
+        ))}
 
-        <CameraRig plan={plan} target={target} route={route} />
+        <CameraRig plan={plan} targets={targets} route={route} />
         <ViewInsets insets={insets} />
       </Canvas>
     </div>
