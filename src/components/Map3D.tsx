@@ -3,16 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Edges, Html, Line, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type { StorePlan, Vec2 } from '../data/types';
-import type { MapTarget } from './Map2D';
-
-interface Props {
-  plan: StorePlan;
-  target: MapTarget | null;
-  route: Vec2[] | null;
-  origin: Vec2 | null;
-  picking: boolean;
-  onPick: (point: Vec2) => void;
-}
+import type { MapInsets, MapTarget, MapViewProps } from './Map2D';
 
 /** Plan-koordinater (x, y) → scenekoordinater (x, z). */
 const toScene = (p: Vec2, height = 0): [number, number, number] => [p.x, height, p.y];
@@ -105,17 +96,44 @@ function Floor({
       }}
     >
       <planeGeometry args={[plan.width, plan.depth]} />
-      <meshStandardMaterial color="#ffffff" roughness={1} metalness={0} />
+      {/* Rent hvitt gulv – uavhengig av lyssettingen. */}
+      <meshBasicMaterial color="#ffffff" />
     </mesh>
   );
 }
 
+/**
+ * Forskyver bildet slik at det som er valgt ikke havner bak søkefeltet eller
+ * produktpanelet.
+ */
+function ViewInsets({ insets }: { insets: MapInsets }) {
+  const { camera, size } = useThree();
+
+  useEffect(() => {
+    const perspective = camera as THREE.PerspectiveCamera;
+    perspective.setViewOffset(
+      size.width,
+      size.height,
+      insets.right / 2,
+      (insets.bottom - insets.top) / 2,
+      size.width,
+      size.height,
+    );
+    perspective.updateProjectionMatrix();
+    return () => {
+      perspective.clearViewOffset();
+    };
+  }, [camera, size.width, size.height, insets.top, insets.right, insets.bottom]);
+
+  return null;
+}
+
 function Route({ route }: { route: Vec2[] }) {
-  const points = route.map((p) => toScene(p, 0.03));
   return (
     <group>
-      <Line points={points} color="#ffffff" lineWidth={9} />
-      <Line points={points} color={INK} lineWidth={4} />
+      {/* Hvit halo litt under den sorte linja, ellers slåss de om dybden. */}
+      <Line points={route.map((p) => toScene(p, 0.02))} color="#ffffff" lineWidth={10} />
+      <Line points={route.map((p) => toScene(p, 0.05))} color={INK} lineWidth={4} />
     </group>
   );
 }
@@ -218,19 +236,19 @@ function CameraRig({
   );
 }
 
-export function Map3D({ plan, target, route, origin, picking, onPick }: Props) {
+export function Map3D({ plan, target, route, origin, picking, insets, onPick }: MapViewProps) {
   return (
     <div className={`map${picking ? ' map--picking' : ''}`}>
       <Canvas
         className="map__canvas"
         dpr={[1, 2]}
+        flat /* ingen tone mapping – hvitt skal være hvitt */
         camera={{ fov: 38, near: 0.1, far: 400, position: [plan.width / 2, 26, plan.depth + 20] }}
       >
         <color attach="background" args={['#ffffff']} />
-        <fog attach="fog" args={['#ffffff', 60, 150]} />
-        <ambientLight intensity={1.5} />
-        <directionalLight position={[18, 34, 12]} intensity={2.1} />
-        <directionalLight position={[-20, 18, -10]} intensity={0.6} />
+        <ambientLight intensity={1.9} />
+        <directionalLight position={[18, 34, 12]} intensity={1.5} />
+        <directionalLight position={[-20, 18, -10]} intensity={0.5} />
 
         <Floor plan={plan} picking={picking} onPick={onPick} />
         <Perimeter plan={plan} />
@@ -241,6 +259,7 @@ export function Map3D({ plan, target, route, origin, picking, onPick }: Props) {
         {target && <TargetMarker target={target} />}
 
         <CameraRig plan={plan} target={target} route={route} />
+        <ViewInsets insets={insets} />
       </Canvas>
     </div>
   );

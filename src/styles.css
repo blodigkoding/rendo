@@ -167,6 +167,13 @@ input {
   color: var(--ink-3);
 }
 
+/* Vi har vår egen tømmeknapp – skjul nettleserens. */
+.search input::-webkit-search-cancel-button,
+.search input::-webkit-search-decoration {
+  appearance: none;
+  display: none;
+}
+
 .search__icon {
   flex: none;
   color: var(--ink-3);
@@ -246,11 +253,13 @@ input {
 }
 
 .store-row__name {
+  display: block;
   font-size: 16px;
   letter-spacing: -0.015em;
 }
 
 .store-row__sub {
+  display: block;
   color: var(--ink-3);
   font-size: 13px;
   margin-top: 2px;
@@ -387,6 +396,7 @@ input {
 
 .store__searchbar .search {
   background: rgba(255, 255, 255, 0.94);
+  -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
@@ -396,6 +406,7 @@ input {
   max-height: min(52vh, 420px);
   overflow-y: auto;
   background: rgba(255, 255, 255, 0.97);
+  -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -404,7 +415,7 @@ input {
 
 .result {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 12px;
   width: 100%;
   padding: 11px 14px;
@@ -427,6 +438,7 @@ input {
 }
 
 .result__name {
+  display: block;
   font-size: 14px;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -435,8 +447,10 @@ input {
 }
 
 .result__sub {
+  display: block;
   font-size: 12px;
   color: var(--ink-3);
+  margin-top: 1px;
 }
 
 .result__code {
@@ -505,6 +519,7 @@ input {
   border: 1px solid var(--line-strong);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.94);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   overflow: hidden;
 }
@@ -927,6 +942,7 @@ input {
   white-space: nowrap;
   transform: translate(-50%, -50%);
   pointer-events: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 

@@ -106,8 +106,8 @@ export function ProductPanel({
               </div>
             </div>
             <div>
-              <div className="fact__label">Høyde over gulv</div>
-              <div className="fact__value">{product.placement.heightCm} cm</div>
+              <div className="fact__label">Høyde</div>
+              <div className="fact__value">{product.placement.heightCm} cm over gulv</div>
             </div>
             <div>
               <div className="fact__label">Fronter</div>

@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { dataSource } from '../data';
 import type { Product, Store, StorePlan, Vec2 } from '../data/types';
 import { buildDirections } from '../lib/directions';
 import { fixtureAccessPoint, pathLength, productMarker } from '../lib/geometry';
 import { buildNavGrid, findRoute, type RouteResult } from '../lib/pathfinding';
-import { Map2D, type MapTarget } from './Map2D';
-import { Map3D } from './Map3D';
+import { Map2D, type MapInsets, type MapTarget } from './Map2D';
 import { ProductPanel } from './ProductPanel';
 import { SearchField } from './SearchField';
 import { BackIcon } from './icons';
+
+/** three.js lastes først når noen faktisk ber om 3D. */
+const Map3D = lazy(() => import('./Map3D').then((module) => ({ default: module.Map3D })));
 
 interface Props {
   storeId: string;
@@ -16,6 +18,29 @@ interface Props {
 }
 
 type View = '2d' | '3d';
+
+/** Hvor mye av kartflaten som dekkes av søkefelt og panel akkurat nå. */
+function useMapInsets(panelOpen: boolean): MapInsets {
+  const [desktop, setDesktop] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches,
+  );
+
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 768px)');
+    const onChange = () => setDesktop(query.matches);
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
+
+  return useMemo(
+    () => ({
+      top: 76,
+      right: panelOpen && desktop ? 372 : 0,
+      bottom: panelOpen && !desktop ? Math.round(window.innerHeight * 0.48) : 0,
+    }),
+    [panelOpen, desktop],
+  );
+}
 
 export function StorePage({ storeId, onBack }: Props) {
   const [store, setStore] = useState<Store | null>(null);
@@ -35,6 +60,7 @@ export function StorePage({ storeId, onBack }: Props) {
   const [routeError, setRouteError] = useState<string | null>(null);
 
   const searchRef = useRef<HTMLDivElement>(null);
+  const insets = useMapInsets(product !== null);
 
   useEffect(() => {
     let active = true;
@@ -189,7 +215,15 @@ export function StorePage({ storeId, onBack }: Props) {
     );
   }
 
-  const MapView = view === '2d' ? Map2D : Map3D;
+  const mapProps = {
+    plan,
+    target,
+    route: route ? route.points : null,
+    origin,
+    picking,
+    insets,
+    onPick: handlePick,
+  };
 
   return (
     <div className="store">
@@ -221,6 +255,7 @@ export function StorePage({ storeId, onBack }: Props) {
             setResultsOpen(true);
           }}
           onKeyDown={onSearchKeyDown}
+          onFocus={() => setResultsOpen(true)}
           placeholder="Søk etter vare"
           aria-label="Søk etter vare i butikken"
         />
@@ -254,17 +289,12 @@ export function StorePage({ storeId, onBack }: Props) {
         )}
       </div>
 
-      <MapView
-        plan={plan}
-        target={target}
-        route={route ? route.points : null}
-        origin={origin}
-        picking={picking}
-        onPick={handlePick}
-      />
+      <Suspense fallback={<div className="map" />}>
+        {view === '2d' ? <Map2D {...mapProps} /> : <Map3D {...mapProps} />}
+      </Suspense>
 
       {(picking || routeError) && (
-        <div className="map__hint">
+        <div className="map__hint" style={{ bottom: 20 + insets.bottom }}>
           <span>{routeError ?? 'Trykk på kartet der du står'}</span>
           <button onClick={() => { setPicking(false); setRouteError(null); }} type="button">
             Avbryt

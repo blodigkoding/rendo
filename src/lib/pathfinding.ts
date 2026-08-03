@@ -63,11 +63,6 @@ const toWorld = (grid: NavGrid, index: number): Vec2 => ({
   y: (Math.floor(index / grid.cols) + 0.5) * grid.cell,
 });
 
-export function isWalkable(grid: NavGrid, p: Vec2): boolean {
-  const { i, j } = toCell(grid, p);
-  return grid.blocked[j * grid.cols + i] === 0;
-}
-
 /** Nærmeste frie rute – brukes når brukeren treffer en hylle med fingeren. */
 function nearestFree(grid: NavGrid, index: number): number | null {
   if (grid.blocked[index] === 0) return index;
@@ -149,58 +144,77 @@ class MinHeap {
   }
 }
 
-const SQRT2 = Math.SQRT2;
+/** Bevegelse følger gangene: bare rett fram, aldri på skrå. */
+const DIRECTIONS: Array<[number, number]> = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+];
 
+/**
+ * Hver sving koster like mye som å gå en meter ekstra. Det gir ruter med få,
+ * lange strekk – slik man faktisk går i en butikk – i stedet for trappetrinn.
+ */
+const TURN_COST = 4;
+
+/**
+ * A* der tilstanden er (rute, retning inn i ruta). Retningen er en del av
+ * tilstanden fordi svingekostnaden avhenger av hvordan man kom dit.
+ */
 function astar(grid: NavGrid, startIndex: number, goalIndex: number): number[] | null {
   const total = grid.cols * grid.rows;
-  const gScore = new Float32Array(total).fill(Infinity);
-  const cameFrom = new Int32Array(total).fill(-1);
-  const closed = new Uint8Array(total);
+  const states = total * DIRECTIONS.length;
+  const gScore = new Float32Array(states).fill(Infinity);
+  const cameFrom = new Int32Array(states).fill(-1);
+  const closed = new Uint8Array(states);
   const open = new MinHeap();
 
   const gx = goalIndex % grid.cols;
   const gy = Math.floor(goalIndex / grid.cols);
-  const heuristic = (index: number) => {
-    const dx = Math.abs((index % grid.cols) - gx);
-    const dy = Math.abs(Math.floor(index / grid.cols) - gy);
-    return (dx + dy) + (SQRT2 - 2) * Math.min(dx, dy);
-  };
+  const heuristic = (cell: number) =>
+    Math.abs((cell % grid.cols) - gx) + Math.abs(Math.floor(cell / grid.cols) - gy);
 
-  gScore[startIndex] = 0;
-  open.push(startIndex, heuristic(startIndex));
+  for (let d = 0; d < DIRECTIONS.length; d++) {
+    const state = startIndex * DIRECTIONS.length + d;
+    gScore[state] = 0;
+    open.push(state, heuristic(startIndex));
+  }
 
   while (open.size > 0) {
     const current = open.pop()!;
-    if (current === goalIndex) {
-      const path: number[] = [];
-      for (let node = current; node !== -1; node = cameFrom[node]) path.push(node);
-      return path.reverse();
-    }
     if (closed[current]) continue;
     closed[current] = 1;
 
-    const ci = current % grid.cols;
-    const cj = Math.floor(current / grid.cols);
+    const cell = Math.floor(current / DIRECTIONS.length);
+    const dir = current % DIRECTIONS.length;
 
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        if (dx === 0 && dy === 0) continue;
-        const ni = ci + dx;
-        const nj = cj + dy;
-        if (ni < 0 || nj < 0 || ni >= grid.cols || nj >= grid.rows) continue;
-        const neighbour = nj * grid.cols + ni;
-        if (grid.blocked[neighbour]) continue;
-        // Ikke skjær hjørner diagonalt.
-        if (dx !== 0 && dy !== 0) {
-          if (grid.blocked[cj * grid.cols + ni] || grid.blocked[nj * grid.cols + ci]) continue;
-        }
-        const step = dx !== 0 && dy !== 0 ? SQRT2 : 1;
-        const tentative = gScore[current] + step;
-        if (tentative < gScore[neighbour]) {
-          gScore[neighbour] = tentative;
-          cameFrom[neighbour] = current;
-          open.push(neighbour, tentative + heuristic(neighbour));
-        }
+    if (cell === goalIndex) {
+      const path: number[] = [];
+      for (let node = current; node !== -1; node = cameFrom[node]) {
+        const nodeCell = Math.floor(node / DIRECTIONS.length);
+        if (path[path.length - 1] !== nodeCell) path.push(nodeCell);
+      }
+      return path.reverse();
+    }
+
+    const ci = cell % grid.cols;
+    const cj = Math.floor(cell / grid.cols);
+
+    for (let d = 0; d < DIRECTIONS.length; d++) {
+      const [dx, dy] = DIRECTIONS[d];
+      const ni = ci + dx;
+      const nj = cj + dy;
+      if (ni < 0 || nj < 0 || ni >= grid.cols || nj >= grid.rows) continue;
+      const neighbour = nj * grid.cols + ni;
+      if (grid.blocked[neighbour]) continue;
+
+      const state = neighbour * DIRECTIONS.length + d;
+      const tentative = gScore[current] + 1 + (d === dir ? 0 : TURN_COST);
+      if (tentative < gScore[state]) {
+        gScore[state] = tentative;
+        cameFrom[state] = current;
+        open.push(state, tentative + heuristic(neighbour));
       }
     }
   }
@@ -208,34 +222,18 @@ function astar(grid: NavGrid, startIndex: number, goalIndex: number): number[] |
   return null;
 }
 
-/** Fri sikt mellom to punkter? Sjekker langs linja med halv rutestørrelse. */
-export function hasLineOfSight(grid: NavGrid, a: Vec2, b: Vec2): boolean {
-  const dist = Math.hypot(b.x - a.x, b.y - a.y);
-  const steps = Math.ceil(dist / (grid.cell * 0.5));
-  for (let s = 0; s <= steps; s++) {
-    const t = steps === 0 ? 0 : s / steps;
-    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-    const { i, j } = toCell(grid, p);
-    if (grid.blocked[j * grid.cols + i]) return false;
-  }
-  return true;
-}
-
-function smooth(grid: NavGrid, points: Vec2[]): Vec2[] {
+/** Slår sammen rutepunkter som ligger på samme rette strekk. */
+function mergeCollinear(points: Vec2[]): Vec2[] {
   if (points.length <= 2) return points;
   const result: Vec2[] = [points[0]];
-  let anchor = 0;
-  while (anchor < points.length - 1) {
-    let furthest = anchor + 1;
-    for (let candidate = points.length - 1; candidate > anchor + 1; candidate--) {
-      if (hasLineOfSight(grid, points[anchor], points[candidate])) {
-        furthest = candidate;
-        break;
-      }
-    }
-    result.push(points[furthest]);
-    anchor = furthest;
+  for (let i = 1; i < points.length - 1; i++) {
+    const previous = result[result.length - 1];
+    const next = points[i + 1];
+    const sameRow = Math.abs(previous.y - points[i].y) < 1e-6 && Math.abs(points[i].y - next.y) < 1e-6;
+    const sameCol = Math.abs(previous.x - points[i].x) < 1e-6 && Math.abs(points[i].x - next.x) < 1e-6;
+    if (!sameRow && !sameCol) result.push(points[i]);
   }
+  result.push(points[points.length - 1]);
   return result;
 }
 
@@ -256,14 +254,11 @@ export function findRoute(grid: NavGrid, from: Vec2, to: Vec2): RouteResult | nu
   const cells = astar(grid, startIndex, goalIndex);
   if (!cells) return null;
 
-  const raw = cells.map((index) => toWorld(grid, index));
-  const start = isWalkable(grid, from) ? from : toWorld(grid, startIndex);
-  const goal = isWalkable(grid, to) ? to : toWorld(grid, goalIndex);
+  const points = mergeCollinear(cells.map((index) => toWorld(grid, index)));
 
-  // Erstatt første/siste rutepunkt med de faktiske punktene når det er fri sikt.
-  if (hasLineOfSight(grid, start, raw[0])) raw[0] = start;
-  const last = raw.length - 1;
-  if (hasLineOfSight(grid, goal, raw[last])) raw[last] = goal;
-
-  return { points: smooth(grid, raw), start, goal };
+  return {
+    points,
+    start: points[0],
+    goal: points[points.length - 1],
+  };
 }

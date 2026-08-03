@@ -17,11 +17,17 @@ export function normalize(value: string): string {
     .trim();
 }
 
+/** Et felt det søkes i, med hvor mye et treff der teller. */
+export interface SearchField {
+  value: string;
+  weight: number;
+}
+
 /**
- * Skår et treff. Høyere er bedre, 0 betyr ingen treff.
- * Vekten faller for hvert felt bakover i lista.
+ * Skår et treff. Høyere er bedre, 0 betyr ingen treff. Alle søkeordene må gi
+ * treff i minst ett felt.
  */
-export function scoreMatch(query: string, fields: string[]): number {
+export function scoreMatch(query: string, fields: SearchField[]): number {
   const q = normalize(query);
   if (!q) return 0;
   const terms = q.split(' ');
@@ -29,20 +35,20 @@ export function scoreMatch(query: string, fields: string[]): number {
   let total = 0;
   for (const term of terms) {
     let best = 0;
-    fields.forEach((field, fieldIndex) => {
-      const value = normalize(field);
-      if (!value) return;
-      const weight = 1 / (fieldIndex + 1);
+    for (const field of fields) {
+      const value = normalize(field.value);
+      if (!value) continue;
       let score = 0;
 
       if (value === term) score = 100;
       else if (value.startsWith(term)) score = 70;
-      else if (value.split(' ').some((word) => word.startsWith(term))) score = 50;
-      else if (value.includes(term)) score = 25;
+      else if (value.split(' ').some((word) => word === term)) score = 90;
+      else if (value.split(' ').some((word) => word.startsWith(term))) score = 55;
+      else if (value.includes(term)) score = 30;
 
-      best = Math.max(best, score * weight);
-    });
-    if (best === 0) return 0; // alle ord må gi treff
+      best = Math.max(best, score * field.weight);
+    }
+    if (best === 0) return 0;
     total += best;
   }
 

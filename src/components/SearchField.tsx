@@ -7,10 +7,19 @@ interface Props {
   placeholder: string;
   autoFocus?: boolean;
   onKeyDown?: (event: React.KeyboardEvent<HTMLInputElement>) => void;
+  onFocus?: () => void;
   'aria-label': string;
 }
 
-export function SearchField({ value, onChange, placeholder, autoFocus, onKeyDown, ...rest }: Props) {
+export function SearchField({
+  value,
+  onChange,
+  placeholder,
+  autoFocus,
+  onKeyDown,
+  onFocus,
+  ...rest
+}: Props) {
   const ref = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -36,6 +45,7 @@ export function SearchField({ value, onChange, placeholder, autoFocus, onKeyDown
         placeholder={placeholder}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={onKeyDown}
+        onFocus={onFocus}
         aria-label={rest['aria-label']}
       />
       {value && (

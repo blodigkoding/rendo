@@ -13,12 +13,20 @@ export interface MapTarget {
   heightCm: number;
 }
 
-interface Props {
+/** Piksler i kartflaten som er dekket av søkefelt og panel. */
+export interface MapInsets {
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+export interface MapViewProps {
   plan: StorePlan;
   target: MapTarget | null;
   route: Vec2[] | null;
   origin: Vec2 | null;
   picking: boolean;
+  insets: MapInsets;
   onPick: (point: Vec2) => void;
 }
 
@@ -35,6 +43,10 @@ const MAX_K = 90;
 function useAnnotations(plan: StorePlan) {
   return useMemo(() => {
     const aisles = new Map<string, Vec2[]>();
+    // Avdelingsnavnet plasseres i gangen foran hyllene, ikke oppå dem – ellers
+    // kolliderer navnene på de to sidene av samme gondolrad. Én etikett per
+    // avdeling per gang, slik at avdelinger som går over flere ganger merkes
+    // der de faktisk står.
     const departments = new Map<string, Vec2[]>();
 
     for (const fixture of plan.fixtures) {
@@ -42,7 +54,11 @@ function useAnnotations(plan: StorePlan) {
       const c = rectCenter(fixture);
       const access = { x: c.x + n.x * (fixture.w / 2 + 1), y: c.y + n.y * (fixture.d / 2 + 1) };
       aisles.set(fixture.aisle, [...(aisles.get(fixture.aisle) ?? []), access]);
-      departments.set(fixture.departmentId, [...(departments.get(fixture.departmentId) ?? []), c]);
+      const key = `${fixture.departmentId}|${fixture.aisle}`;
+      departments.set(key, [
+        ...(departments.get(key) ?? []),
+        { x: c.x + n.x * (fixture.w / 2 + 0.85), y: c.y + n.y * (fixture.d / 2 + 0.85) },
+      ]);
     }
 
     const spread = (points: Vec2[]) => {
@@ -69,10 +85,12 @@ function useAnnotations(plan: StorePlan) {
       };
     });
 
-    const deptLabels = [...departments.entries()].map(([id, points]) => {
+    const deptLabels = [...departments.entries()].map(([key, points]) => {
       const s = spread(points);
       const vertical = s.maxY - s.minY > s.maxX - s.minX;
+      const id = key.split('|')[0];
       return {
+        key,
         id,
         name: plan.departments.find((d) => d.id === id)?.name ?? id,
         x: s.cx,
@@ -85,7 +103,7 @@ function useAnnotations(plan: StorePlan) {
   }, [plan]);
 }
 
-export function Map2D({ plan, target, route, origin, picking, onPick }: Props) {
+export function Map2D({ plan, target, route, origin, picking, insets, onPick }: MapViewProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -109,18 +127,24 @@ export function Map2D({ plan, target, route, origin, picking, onPick }: Props) {
     return () => observer.disconnect();
   }, []);
 
+  const insetsRef = useRef(insets);
+  insetsRef.current = insets;
+
+  /** Sentrerer et område i den delen av kartet som faktisk er synlig. */
   const fitTo = useCallback(
     (box: { x: number; y: number; w: number; d: number }, padding = 40, maxK = MAX_K) => {
       const { w, h } = sizeRef.current;
       if (w === 0 || h === 0) return;
-      const k = Math.max(
-        MIN_K,
-        Math.min(Math.min((w - padding * 2) / box.w, (h - padding * 2) / box.d), maxK),
-      );
+      const { top, right, bottom } = insetsRef.current;
+      const availableW = Math.max(120, w - right - padding * 2);
+      const availableH = Math.max(120, h - top - bottom - padding * 2);
+      const k = Math.max(MIN_K, Math.min(Math.min(availableW / box.w, availableH / box.d), maxK));
+      const centreX = (w - right) / 2;
+      const centreY = top + (h - top - bottom) / 2;
       setTransform({
         k,
-        x: w / 2 - (box.x + box.w / 2) * k,
-        y: h / 2 - (box.y + box.d / 2) * k,
+        x: centreX - (box.x + box.w / 2) * k,
+        y: centreY - (box.y + box.d / 2) * k,
       });
     },
     [],
@@ -154,7 +178,7 @@ export function Map2D({ plan, target, route, origin, picking, onPick }: Props) {
     } else if (target) {
       fitTo({ x: target.marker.x - 6, y: target.marker.y - 6, w: 12, d: 12 }, 40, 34);
     }
-  }, [routeKey, target?.fixture.id, size.w, fitTo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [routeKey, target?.fixture.id, size.w, insets.right, insets.bottom, fitTo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toWorld = useCallback(
     (clientX: number, clientY: number): Vec2 => {
@@ -312,7 +336,7 @@ export function Map2D({ plan, target, route, origin, picking, onPick }: Props) {
           {/* avdelingsnavn */}
           {deptLabels.map((label) => (
             <text
-              key={label.id}
+              key={label.key}
               className="plan__label"
               x={label.x}
               y={label.y}
@@ -409,7 +433,7 @@ export function Map2D({ plan, target, route, origin, picking, onPick }: Props) {
         </g>
       </svg>
 
-      <div className="map__zoom">
+      <div className="map__zoom" style={{ right: 12 + insets.right, bottom: 20 + insets.bottom }}>
         <button
           type="button"
           aria-label="Zoom inn"
@@ -426,7 +450,7 @@ export function Map2D({ plan, target, route, origin, picking, onPick }: Props) {
         </button>
       </div>
 
-      <div className="map__legend">
+      <div className="map__legend" style={{ bottom: 20 + insets.bottom }}>
         <span className="map__scale" />
         <span>{scaleMeters < 10 ? scaleMeters.toFixed(1).replace('.', ',') : Math.round(scaleMeters)} m</span>
       </div>

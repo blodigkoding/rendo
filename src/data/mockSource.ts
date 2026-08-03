@@ -3,7 +3,7 @@ import type { Product, Store, StorePlan } from './types';
 import { DEMO_PLAN, DEPARTMENT_NAME } from './mock/plan';
 import { DEMO_PRODUCTS } from './mock/products';
 import { DEMO_STORES } from './mock/stores';
-import { scoreMatch } from '../lib/search';
+import { scoreMatch, type SearchField } from '../lib/search';
 
 /** Liten kunstig forsinkelse, så UI-et må håndtere lasting som mot ekte API. */
 const delay = <T,>(value: T, ms = 90): Promise<T> =>
@@ -11,15 +11,15 @@ const delay = <T,>(value: T, ms = 90): Promise<T> =>
 
 const fixtureById = new Map(DEMO_PLAN.fixtures.map((f) => [f.id, f]));
 
-function productFields(product: Product): string[] {
+function productFields(product: Product): SearchField[] {
   const fixture = fixtureById.get(product.placement.fixtureId);
   return [
-    product.name,
-    product.brand,
-    DEPARTMENT_NAME.get(product.departmentId) ?? '',
-    product.keywords.join(' '),
-    product.ean,
-    fixture?.code ?? '',
+    { value: product.name, weight: 1 },
+    { value: product.keywords.join(' '), weight: 0.95 },
+    { value: product.brand, weight: 0.7 },
+    { value: DEPARTMENT_NAME.get(product.departmentId) ?? '', weight: 0.55 },
+    { value: product.ean, weight: 0.9 },
+    { value: fixture?.code ?? '', weight: 0.9 },
   ];
 }
 
@@ -32,7 +32,13 @@ export const mockSource: RetailDataSource = {
     }
     const scored = DEMO_STORES.map((store) => ({
       store,
-      score: scoreMatch(query, [store.name, store.city, store.address, store.chain, store.postalCode]),
+      score: scoreMatch(query, [
+        { value: store.name, weight: 1 },
+        { value: store.city, weight: 0.9 },
+        { value: store.address, weight: 0.7 },
+        { value: store.chain, weight: 0.5 },
+        { value: store.postalCode, weight: 0.8 },
+      ]),
     }))
       .filter((row) => row.score > 0)
       .sort((a, b) => b.score - a.score || a.store.distanceKm - b.store.distanceKm)
