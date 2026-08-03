@@ -203,7 +203,8 @@ function CameraRig({
       route.forEach((p) => box.expandByPoint(new THREE.Vector3(p.x, 0, p.y)));
       const centre = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
-      const reach = Math.max(size.x, size.z, 8);
+      // Korte ruter skal ikke gi et kamera som klistrer seg inntil hylla.
+      const reach = Math.max(size.x, size.z, 14);
       desiredTarget.current.set(centre.x, 0.8, centre.z);
       desiredPosition.current.set(centre.x, reach * 0.95 + 6, centre.z + reach * 0.9 + 8);
     } else if (target) {
