@@ -1,17 +1,80 @@
-import { useEffect, useMemo, useRef, type ComponentRef } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Edges, Html, Line, OrbitControls } from '@react-three/drei';
+import { Html, Line, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import type { StorePlan, Vec2 } from '../data/types';
+import type { Fixture, StorePlan, Vec2 } from '../data/types';
+import { MAP_PALETTE as C } from '../lib/palette';
 import type { MapInsets, MapTarget, MapViewProps } from './Map2D';
+import { FitIcon, RotateLeftIcon, RotateRightIcon } from './icons';
+
+/**
+ * Butikken som isometrisk modell.
+ *
+ * Kameraet er ortografisk og låst til fire faste hjørner. Man drar for å flytte
+ * og kniper for å zoome – akkurat som i planen – og roterer med knapper i stedet
+ * for å kunne snurre modellen ut av kontroll.
+ */
 
 /** Plan-koordinater (x, y) → scenekoordinater (x, z). */
 const toScene = (p: Vec2, height = 0): [number, number, number] => [p.x, height, p.y];
 
-const INK = '#0b0b0c';
-const SHELF = '#ededef';
-const SHELF_DIM = '#f5f5f6';
-const EDGE = '#c6c6cb';
+/** Isometrisk fallvinkel. */
+const PITCH = Math.atan(Math.SQRT1_2);
+const CAMERA_DISTANCE = 120;
+const SLAB = 0.45;
+
+function directionFor(yaw: number) {
+  return new THREE.Vector3(
+    Math.sin(yaw) * Math.cos(PITCH),
+    Math.sin(PITCH),
+    Math.cos(yaw) * Math.cos(PITCH),
+  ).normalize();
+}
+
+/* ---------------------------------------------------------------- innredning */
+
+function FixtureMesh({
+  fixture,
+  state,
+}: {
+  fixture: Fixture;
+  state: 'plain' | 'dim' | 'dept' | 'target';
+}) {
+  const height = fixture.heightCm / 100;
+  const plinth = 0.12;
+  const cap = 0.06;
+  const body = Math.max(0.1, height - plinth - cap);
+  const cx = fixture.x + fixture.w / 2;
+  const cz = fixture.y + fixture.d / 2;
+
+  const bodyColor =
+    state === 'target' ? C.ink : state === 'dept' ? C.shelfDept : state === 'dim' ? C.shelfDim : C.shelf;
+
+  return (
+    <group position={[cx, 0, cz]}>
+      {/* sokkel */}
+      <mesh position={[0, plinth / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[fixture.w * 0.96, plinth, fixture.d * 0.96]} />
+        <meshStandardMaterial color={state === 'target' ? C.ink : C.floorEdge} roughness={0.9} />
+      </mesh>
+
+      {/* selve reolen */}
+      <mesh position={[0, plinth + body / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[fixture.w, body, fixture.d]} />
+        <meshStandardMaterial color={bodyColor} roughness={0.92} />
+      </mesh>
+
+      {/* treplate på topp – gir varmen fra referansen og markerer overkanten */}
+      <mesh position={[0, plinth + body + cap / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[fixture.w * 1.04, cap, fixture.d * 1.04]} />
+        <meshStandardMaterial
+          color={state === 'target' ? C.ink : C.wood}
+          roughness={0.75}
+        />
+      </mesh>
+    </group>
+  );
+}
 
 function Fixtures({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) {
   const targetFixtures = new Set(targets.map((t) => t.fixture.id));
@@ -20,22 +83,21 @@ function Fixtures({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) 
 
   return (
     <group>
-      {plan.fixtures.map((fixture) => {
-        const isTarget = targetFixtures.has(fixture.id);
-        const inDept = targetDepartments.has(fixture.departmentId);
-        const height = fixture.heightCm / 100;
-        const color = isTarget ? INK : inDept ? '#e2e2e5' : hasTargets ? SHELF_DIM : SHELF;
-        return (
-          <mesh
-            key={fixture.id}
-            position={[fixture.x + fixture.w / 2, height / 2, fixture.y + fixture.d / 2]}
-          >
-            <boxGeometry args={[fixture.w, height, fixture.d]} />
-            <meshStandardMaterial color={color} roughness={0.95} metalness={0} />
-            <Edges threshold={20} color={isTarget ? INK : EDGE} />
-          </mesh>
-        );
-      })}
+      {plan.fixtures.map((fixture) => (
+        <FixtureMesh
+          key={fixture.id}
+          fixture={fixture}
+          state={
+            targetFixtures.has(fixture.id)
+              ? 'target'
+              : targetDepartments.has(fixture.departmentId)
+                ? 'dept'
+                : hasTargets
+                  ? 'dim'
+                  : 'plain'
+          }
+        />
+      ))}
     </group>
   );
 }
@@ -44,23 +106,66 @@ function Checkouts({ plan }: { plan: StorePlan }) {
   return (
     <group>
       {plan.checkouts.map((checkout) => (
-        <mesh
+        <group
           key={checkout.id}
-          position={[checkout.x + checkout.w / 2, 0.5, checkout.y + checkout.d / 2]}
+          position={[checkout.x + checkout.w / 2, 0, checkout.y + checkout.d / 2]}
         >
-          <boxGeometry args={[checkout.w, 1, checkout.d]} />
-          <meshStandardMaterial color="#f3f3f4" roughness={0.95} metalness={0} />
-          <Edges threshold={20} color={EDGE} />
-        </mesh>
+          <mesh position={[0, 0.45, 0]} castShadow receiveShadow>
+            <boxGeometry args={[checkout.w, 0.9, checkout.d]} />
+            <meshStandardMaterial color={C.shelf} roughness={0.92} />
+          </mesh>
+          <mesh position={[0, 0.93, 0]} castShadow receiveShadow>
+            <boxGeometry args={[checkout.w * 1.08, 0.06, checkout.d * 1.12]} />
+            <meshStandardMaterial color={C.wood} roughness={0.75} />
+          </mesh>
+        </group>
       ))}
     </group>
   );
 }
 
-/** Lav sokkel langs ytterveggen – gir modellen en kant uten å stenge utsikten. */
+/** Gulvplaten, formet som butikken, med tykkelse så den leser som en modell. */
+function Slab({
+  plan,
+  picking,
+  onPick,
+}: {
+  plan: StorePlan;
+  picking: boolean;
+  onPick: (point: Vec2) => void;
+}) {
+  const geometry = useMemo(() => {
+    const shape = new THREE.Shape();
+    plan.outline.forEach((point, index) => {
+      if (index === 0) shape.moveTo(point.x, point.y);
+      else shape.lineTo(point.x, point.y);
+    });
+    shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: SLAB, bevelEnabled: false });
+    geo.rotateX(Math.PI / 2);
+    return geo;
+  }, [plan.outline]);
+
+  return (
+    <mesh
+      geometry={geometry}
+      receiveShadow
+      castShadow
+      onPointerDown={(event) => {
+        if (!picking) return;
+        event.stopPropagation();
+        onPick({ x: event.point.x, y: event.point.z });
+      }}
+    >
+      <meshStandardMaterial color={C.floor} roughness={1} />
+    </mesh>
+  );
+}
+
+/** Lav brystning langs ytterveggen. */
 function Perimeter({ plan }: { plan: StorePlan }) {
-  const thickness = 0.16;
-  const height = 0.38;
+  const thickness = 0.18;
+  const height = 0.55;
 
   const walls = plan.outline.map((point, index) => {
     const next = plan.outline[(index + 1) % plan.outline.length];
@@ -82,59 +187,58 @@ function Perimeter({ plan }: { plan: StorePlan }) {
           key={wall.key}
           position={[wall.cx, height / 2, wall.cz]}
           rotation={[0, -wall.angle, 0]}
+          castShadow
+          receiveShadow
         >
           <boxGeometry args={[wall.length, height, thickness]} />
-          <meshStandardMaterial color="#f0f0f1" roughness={1} metalness={0} />
-          <Edges threshold={20} color="#a9a9b0" />
+          <meshStandardMaterial color={C.floorEdge} roughness={1} />
         </mesh>
       ))}
     </group>
   );
 }
 
-function Floor({
-  plan,
-  picking,
-  onPick,
-}: {
-  plan: StorePlan;
-  picking: boolean;
-  onPick: (point: Vec2) => void;
-}) {
-  // Gulvet følger butikkens faktiske form.
-  const geometry = useMemo(() => {
-    const shape = new THREE.Shape();
-    plan.outline.forEach((point, index) => {
-      if (index === 0) shape.moveTo(point.x, point.y);
-      else shape.lineTo(point.x, point.y);
-    });
-    shape.closePath();
-    const geo = new THREE.ShapeGeometry(shape);
-    geo.rotateX(-Math.PI / 2);
-    return geo;
-  }, [plan.outline]);
-
+/** Inngangen malt på gulvet. */
+function Entrances({ plan, yaw }: { plan: StorePlan; yaw: number }) {
+  const flip = Math.cos(yaw) < 0 ? Math.PI : 0;
   return (
-    <mesh
-      geometry={geometry}
-      onPointerDown={(event) => {
-        if (!picking) return;
-        event.stopPropagation();
-        onPick({ x: event.point.x, y: event.point.z });
-      }}
-    >
-      {/* Rent hvitt gulv – uavhengig av lyssettingen. */}
-      <meshBasicMaterial color="#ffffff" side={THREE.DoubleSide} />
-    </mesh>
+    <group>
+      {plan.entrances.map((entrance) => (
+        <group key={entrance.id} position={toScene(entrance.position, 0.01)}>
+          <mesh rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[3.2, 1.6]} />
+            <meshBasicMaterial color={C.wood} transparent opacity={0.55} />
+          </mesh>
+          <Html
+            transform
+            sprite={false}
+            rotation={[-Math.PI / 2, 0, flip]}
+            position={[0, 0.02, 0]}
+            scale={1.6}
+            pointerEvents="none"
+            zIndexRange={[1, 0]}
+          >
+            <div className="scene__floor-label">{entrance.name}</div>
+          </Html>
+        </group>
+      ))}
+    </group>
   );
 }
 
 /**
- * Avdelingsnavn som skilt oppå reolene. De ligger flatt i modellen, langs raden
- * de hører til, slik at de aldri legger seg oppå hverandre slik svevende
- * etiketter gjør.
+ * Avdelingsnavn som skilt oppå reolene. Skiltene ligger flatt i modellen, så
+ * teksten må snus når man roterer rundt butikken – ellers står den på hodet.
  */
-function DepartmentLabels({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) {
+function DepartmentLabels({
+  plan,
+  targets,
+  yaw,
+}: {
+  plan: StorePlan;
+  targets: MapTarget[];
+  yaw: number;
+}) {
   const active = new Set(targets.map((t) => t.departmentId));
 
   const labels = useMemo(() => {
@@ -178,22 +282,27 @@ function DepartmentLabels({ plan, targets }: { plan: StorePlan; targets: MapTarg
         name: plan.departments.find((d) => d.id === group.dept)?.name ?? group.dept,
         x: vertical ? (group.minX + group.maxX) / 2 : group.minX + (group.maxX - group.minX) * near,
         z: vertical ? group.minZ + (group.maxZ - group.minZ) * near : (group.minZ + group.maxZ) / 2,
-        y: group.top + 0.06,
+        y: group.top + 0.1,
         vertical,
       };
     });
   }, [plan]);
 
+  // Kameraets høyre-akse: teksten skal alltid lese mot høyre på skjermen.
+  const right = { x: Math.cos(yaw), z: -Math.sin(yaw) };
+
   return (
     <group>
-      {labels.map((label) => (
+      {labels.map((label) => {
+        const along = label.vertical ? right.z : right.x;
+        const spin = (label.vertical ? -Math.PI / 2 : 0) + (along < 0 ? Math.PI : 0);
+        return (
         <Html
           key={label.key}
           transform
           sprite={false}
           position={[label.x, label.y, label.z]}
-          rotation={[-Math.PI / 2, 0, label.vertical ? -Math.PI / 2 : 0]}
-          /* drei deler CSS-piksler på 40 i transform-modus – dette gir ~0,5 m høy skrift. */
+          rotation={[-Math.PI / 2, 0, spin]}
           scale={2}
           zIndexRange={[1, 0]}
           pointerEvents="none"
@@ -205,80 +314,59 @@ function DepartmentLabels({ plan, targets }: { plan: StorePlan; targets: MapTarg
             {label.name}
           </div>
         </Html>
-      ))}
+        );
+      })}
     </group>
   );
-}
-
-/**
- * Forskyver bildet slik at det som er valgt ikke havner bak søkefeltet eller
- * produktpanelet.
- */
-function ViewInsets({ insets }: { insets: MapInsets }) {
-  const { camera, size } = useThree();
-
-  useEffect(() => {
-    const perspective = camera as THREE.PerspectiveCamera;
-    perspective.setViewOffset(
-      size.width,
-      size.height,
-      insets.right / 2,
-      (insets.bottom - insets.top) / 2,
-      size.width,
-      size.height,
-    );
-    perspective.updateProjectionMatrix();
-    return () => {
-      perspective.clearViewOffset();
-    };
-  }, [camera, size.width, size.height, insets.top, insets.right, insets.bottom]);
-
-  return null;
 }
 
 function Route({ route }: { route: Vec2[] }) {
   return (
     <group>
-      {/* Hvit halo litt under den sorte linja, ellers slåss de om dybden. */}
-      <Line points={route.map((p) => toScene(p, 0.02))} color="#ffffff" lineWidth={10} />
-      <Line points={route.map((p) => toScene(p, 0.05))} color={INK} lineWidth={4} />
+      <Line points={route.map((p) => toScene(p, 0.04))} color="#ffffff" lineWidth={11} />
+      <Line points={route.map((p) => toScene(p, 0.07))} color={C.ink} lineWidth={5} />
     </group>
   );
 }
 
 function OriginMarker({ origin }: { origin: Vec2 }) {
   return (
-    <group position={toScene(origin, 0.02)}>
+    <group position={toScene(origin, 0.03)}>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.5, 0.62, 48]} />
-        <meshBasicMaterial color={INK} />
+        <ringGeometry args={[0.52, 0.66, 48]} />
+        <meshBasicMaterial color={C.ink} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.26, 32]} />
-        <meshBasicMaterial color={INK} />
+        <circleGeometry args={[0.28, 32]} />
+        <meshBasicMaterial color={C.ink} />
       </mesh>
     </group>
   );
 }
 
-/** Markerer varen i riktig høyde – det er her 3D faktisk hjelper. */
+/**
+ * Målet vises som en stang som rekker over reolene, med en kule i den høyden
+ * varen faktisk står. Da ser man både hvor og hvor høyt.
+ */
 function TargetMarker({ target }: { target: MapTarget }) {
-  const height = target.heightCm / 100;
+  const shelf = target.heightCm / 100;
+  const pole = Math.max(target.fixture.heightCm / 100 + 0.9, shelf + 0.9);
+
   return (
     <group position={toScene(target.marker)}>
-      <mesh position={[0, height / 2, 0]}>
-        <cylinderGeometry args={[0.018, 0.018, height, 8]} />
-        <meshBasicMaterial color={INK} />
-      </mesh>
-      <mesh position={[0, height, 0]}>
-        <sphereGeometry args={[0.11, 20, 20]} />
-        <meshBasicMaterial color={INK} />
-      </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
-        <ringGeometry args={[0.34, 0.42, 40]} />
-        <meshBasicMaterial color={INK} />
+        <ringGeometry args={[0.36, 0.46, 40]} />
+        <meshBasicMaterial color={C.ink} />
       </mesh>
-      <Html position={[0, height + 0.55, 0]} center distanceFactor={22} zIndexRange={[2, 0]}>
+      <mesh position={[0, pole / 2, 0]}>
+        <cylinderGeometry args={[0.026, 0.026, pole, 8]} />
+        <meshBasicMaterial color={C.ink} />
+      </mesh>
+      <mesh position={[0, shelf, 0]}>
+        <sphereGeometry args={[0.16, 20, 20]} />
+        <meshBasicMaterial color={C.ink} />
+      </mesh>
+      <Html position={[0, pole + 0.3, 0]} center distanceFactor={undefined} zIndexRange={[2, 0]}>
         <div className="scene__label scene__label--target">
           {target.stop ? `${target.stop} · ` : ''}
           {target.fixture.code} · {Math.round(target.heightCm)} cm
@@ -288,73 +376,99 @@ function TargetMarker({ target }: { target: MapTarget }) {
   );
 }
 
-/**
- * Beveger kameraet mykt mot det som er valgt: hele butikken når ingenting er
- * valgt, ellers varen eller ruten.
- */
-function CameraRig({
-  plan,
-  targets,
-  route,
-}: {
+/* -------------------------------------------------------------------- kamera */
+
+interface RigProps {
   plan: StorePlan;
   targets: MapTarget[];
   route: Vec2[] | null;
-}) {
+  insets: MapInsets;
+  yaw: number;
+  fitToken: number;
+}
+
+function CameraRig({ plan, targets, route, insets, yaw, fitToken }: RigProps) {
   const controls = useRef<ComponentRef<typeof OrbitControls>>(null);
   const { camera, size } = useThree();
-  const desiredTarget = useRef(new THREE.Vector3(plan.width / 2, 0, plan.depth / 2));
-  const desiredPosition = useRef(new THREE.Vector3(plan.width / 2, 26, plan.depth + 20));
+  const desiredTarget = useRef(new THREE.Vector3());
+  const desiredPosition = useRef(new THREE.Vector3());
+  const desiredZoom = useRef(20);
 
   useEffect(() => {
-    const perspective = camera as THREE.PerspectiveCamera;
+    const ortho = camera as THREE.OrthographicCamera;
 
-    /** Avstanden som trengs for at et område av gitt størrelse får plass i bildet. */
-    const distanceFor = (width: number, depth: number) => {
-      const fov = (perspective.fov * Math.PI) / 180;
-      const aspect = Math.max(0.35, size.width / Math.max(1, size.height));
-      const needed = Math.max(depth, width / aspect);
-      return needed / 2 / Math.tan(fov / 2);
-    };
+    // Punktene som skal få plass i bildet.
+    const focus: Vec2[] =
+      route && route.length > 1
+        ? route
+        : targets.length > 0
+          ? targets.map((t) => t.marker)
+          : plan.outline;
+    const minSpan = targets.length === 1 && !route ? 11 : route ? 14 : 6;
 
-    /** Ser skrått ned på et område, med litt luft rundt. */
-    const framePoints = (points: Vec2[], minSpan: number, margin = 1.35) => {
-      const box = new THREE.Box3();
-      points.forEach((p) => box.expandByPoint(new THREE.Vector3(p.x, 0, p.y)));
-      const centre = box.getCenter(new THREE.Vector3());
-      const measured = box.getSize(new THREE.Vector3());
-      const width = Math.max(measured.x, minSpan);
-      const depth = Math.max(measured.z, minSpan);
-      // Skrå vinkel gjør at flaten dekker mer på høykant enn i dybden.
-      const pitch = Math.PI / 3.1;
-      const distance = distanceFor(width, depth * Math.sin(pitch) + 2) * margin;
-      desiredTarget.current.set(centre.x, 0.8, centre.z);
-      desiredPosition.current.set(
-        centre.x,
-        Math.max(6, distance * Math.sin(pitch)),
-        centre.z + distance * Math.cos(pitch),
-      );
-    };
+    const box = new THREE.Box2();
+    focus.forEach((p) => box.expandByPoint(new THREE.Vector2(p.x, p.y)));
+    const centre = box.getCenter(new THREE.Vector2());
+    const measured = box.getSize(new THREE.Vector2());
+    const spanX = Math.max(measured.x, minSpan);
+    const spanZ = Math.max(measured.y, minSpan);
 
-    if (route && route.length > 1) {
-      // Korte ruter skal ikke gi et kamera som klistrer seg inntil hylla.
-      framePoints(route, 13);
-    } else if (targets.length === 1) {
-      const { marker } = targets[0];
-      framePoints([marker], 9, 1.1);
-    } else if (targets.length > 1) {
-      framePoints(
-        targets.map((t) => t.marker),
-        13,
-      );
-    } else {
-      framePoints(plan.outline, 10, 1.12);
+    // Høyden på innredningen teller med når vi skal ramme inn.
+    const tallest = focus === plan.outline ? 2.4 : 2.2;
+
+    const direction = directionFor(yaw);
+    const up = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3().crossVectors(up, direction).normalize();
+    const screenUp = new THREE.Vector3().crossVectors(direction, right).normalize();
+
+    // Projiser hjørnene av området på kameraets bildeplan.
+    let minU = Infinity;
+    let maxU = -Infinity;
+    let minV = Infinity;
+    let maxV = -Infinity;
+    for (const dx of [-spanX / 2, spanX / 2]) {
+      for (const dz of [-spanZ / 2, spanZ / 2]) {
+        for (const dy of [0, tallest]) {
+          const point = new THREE.Vector3(dx, dy, dz);
+          minU = Math.min(minU, point.dot(right));
+          maxU = Math.max(maxU, point.dot(right));
+          minV = Math.min(minV, point.dot(screenUp));
+          maxV = Math.max(maxV, point.dot(screenUp));
+        }
+      }
     }
-  }, [plan, targets, route, camera, size.width, size.height]);
+
+    const padding = 14;
+    const availableW = Math.max(120, size.width - insets.right - padding * 2);
+    const availableH = Math.max(120, size.height - insets.top - insets.bottom - padding * 2);
+    const zoom = Math.min(availableW / Math.max(0.1, maxU - minU), availableH / Math.max(0.1, maxV - minV));
+
+    desiredZoom.current = Math.max(4, Math.min(90, zoom));
+    desiredTarget.current.set(centre.x, tallest / 2, centre.y);
+    desiredPosition.current
+      .copy(desiredTarget.current)
+      .addScaledVector(direction, CAMERA_DISTANCE);
+
+    ortho.near = -CAMERA_DISTANCE * 2;
+    ortho.far = CAMERA_DISTANCE * 4;
+    // Forskyv bildet forbi søkefelt og ark.
+    ortho.setViewOffset(
+      size.width,
+      size.height,
+      insets.right / 2,
+      (insets.bottom - insets.top) / 2,
+      size.width,
+      size.height,
+    );
+    ortho.updateProjectionMatrix();
+  }, [plan, targets, route, yaw, insets, size.width, size.height, camera, fitToken]);
 
   useFrame((_, delta) => {
-    const lerp = Math.min(1, delta * 2.6);
+    const ortho = camera as THREE.OrthographicCamera;
+    const lerp = Math.min(1, delta * 3.4);
     camera.position.lerp(desiredPosition.current, lerp);
+    ortho.zoom += (desiredZoom.current - ortho.zoom) * lerp;
+    ortho.updateProjectionMatrix();
     if (controls.current) {
       controls.current.target.lerp(desiredTarget.current, lerp);
       controls.current.update();
@@ -364,58 +478,132 @@ function CameraRig({
   return (
     <OrbitControls
       ref={controls}
+      enableRotate={false}
       enableDamping
-      dampingFactor={0.12}
-      minDistance={5}
-      maxDistance={70}
-      maxPolarAngle={Math.PI / 2.15}
+      dampingFactor={0.16}
+      zoomSpeed={0.9}
+      mouseButtons={{
+        LEFT: THREE.MOUSE.PAN,
+        MIDDLE: THREE.MOUSE.DOLLY,
+        RIGHT: THREE.MOUSE.PAN,
+      }}
+      touches={{ ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN }}
     />
   );
 }
 
-export function Map3D({ plan, targets, route, origin, picking, insets, onPick }: MapViewProps) {
+/* ---------------------------------------------------------------------- lys */
+
+function Lighting({ plan }: { plan: StorePlan }) {
+  const span = Math.max(plan.width, plan.depth);
   return (
-    <div className={`map${picking ? ' map--picking' : ''}`}>
+    <>
+      <ambientLight intensity={1.35} />
+      <directionalLight
+        castShadow
+        position={[plan.width * 0.9, span * 1.1, plan.depth * 1.25]}
+        intensity={1.5}
+        shadow-mapSize={[2048, 2048]}
+        shadow-bias={-0.0006}
+        shadow-camera-left={-span}
+        shadow-camera-right={span}
+        shadow-camera-top={span}
+        shadow-camera-bottom={-span}
+        shadow-camera-near={0.1}
+        shadow-camera-far={span * 4}
+      />
+      <directionalLight position={[-span, span * 0.6, -span * 0.4]} intensity={0.35} />
+    </>
+  );
+}
+
+/* --------------------------------------------------------------------- scene */
+
+export function Map3D({ plan, targets, route, origin, picking, insets, onPick }: MapViewProps) {
+  // Fire faste hjørner å se butikken fra.
+  const [corner, setCorner] = useState(0);
+  const [fitToken, setFitToken] = useState(0);
+  const yaw = Math.PI / 4 + (corner * Math.PI) / 2;
+
+  return (
+    <div className={`map map--scene${picking ? ' map--picking' : ''}`}>
       <Canvas
         className="map__canvas"
         dpr={[1, 2]}
+        shadows
         flat /* ingen tone mapping – hvitt skal være hvitt */
-        camera={{ fov: 38, near: 0.1, far: 400, position: [plan.width / 2, 26, plan.depth + 20] }}
+        orthographic
+        camera={{ position: [40, 40, 40], zoom: 18, near: -400, far: 800 }}
       >
-        <color attach="background" args={['#ffffff']} />
-        <ambientLight intensity={1.9} />
-        <directionalLight position={[18, 34, 12]} intensity={1.5} />
-        <directionalLight position={[-20, 18, -10]} intensity={0.5} />
+        <color attach="background" args={[C.sage]} />
+        <Lighting plan={plan} />
 
-        {/* Fanger opp trykk utenfor butikken, så brukeren får beskjed. */}
+        {/* underlaget modellen står på */}
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[plan.width / 2, -SLAB, plan.depth / 2]}
+          receiveShadow
+        >
+          <planeGeometry args={[plan.width * 6, plan.depth * 6]} />
+          <meshStandardMaterial color={C.sage} roughness={1} />
+        </mesh>
+
+        {/* fanger opp trykk utenfor butikken, så brukeren får beskjed */}
         {picking && (
           <mesh
             rotation={[-Math.PI / 2, 0, 0]}
-            position={[plan.width / 2, -0.05, plan.depth / 2]}
+            position={[plan.width / 2, -SLAB + 0.01, plan.depth / 2]}
             onPointerDown={(event) => {
               event.stopPropagation();
               onPick({ x: event.point.x, y: event.point.z });
             }}
           >
-            <planeGeometry args={[plan.width * 4, plan.depth * 4]} />
+            <planeGeometry args={[plan.width * 5, plan.depth * 5]} />
             <meshBasicMaterial transparent opacity={0} depthWrite={false} />
           </mesh>
         )}
 
-        <Floor plan={plan} picking={picking} onPick={onPick} />
+        <Slab plan={plan} picking={picking} onPick={onPick} />
         <Perimeter plan={plan} />
+        <Entrances plan={plan} yaw={yaw} />
         <Checkouts plan={plan} />
         <Fixtures plan={plan} targets={targets} />
-        <DepartmentLabels plan={plan} targets={targets} />
+        <DepartmentLabels plan={plan} targets={targets} yaw={yaw} />
         {route && route.length > 1 && <Route route={route} />}
         {origin && <OriginMarker origin={origin} />}
         {targets.map((item) => (
           <TargetMarker key={item.id} target={item} />
         ))}
 
-        <CameraRig plan={plan} targets={targets} route={route} />
-        <ViewInsets insets={insets} />
+        <CameraRig
+          plan={plan}
+          targets={targets}
+          route={route}
+          insets={insets}
+          yaw={yaw}
+          fitToken={fitToken}
+        />
       </Canvas>
+
+      <div className="map__zoom" style={{ right: 12 + insets.right, bottom: 16 + insets.bottom }}>
+        <button
+          type="button"
+          aria-label="Snu mot venstre"
+          onClick={() => setCorner((c) => (c + 3) % 4)}
+        >
+          <RotateLeftIcon />
+        </button>
+        <button
+          type="button"
+          aria-label="Snu mot høyre"
+          onClick={() => setCorner((c) => (c + 1) % 4)}
+        >
+          <RotateRightIcon />
+        </button>
+        <button type="button" aria-label="Tilpass visningen" onClick={() => setFitToken((t) => t + 1)}>
+          <FitIcon />
+        </button>
+      </div>
     </div>
   );
 }

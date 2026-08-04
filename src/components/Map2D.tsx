@@ -476,7 +476,7 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
   return (
     <div
       ref={hostRef}
-      className={`map${picking ? ' map--picking' : ''}`}
+      className={`map map--plan${picking ? ' map--picking' : ''}`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
@@ -488,9 +488,19 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
           <clipPath id="plan-floor" clipPathUnits="userSpaceOnUse">
             <path d={outlinePath} />
           </clipPath>
+          <filter id="plan-blur" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation={0.4} />
+          </filter>
         </defs>
 
         <g transform={`translate(${transform.x} ${transform.y}) scale(${transform.k})`}>
+          {/* Myk slagskygge, så gulvplaten løfter seg fra bakgrunnen. */}
+          <path
+            className="plan__shadow"
+            d={outlinePath}
+            transform="translate(0.55 0.75)"
+            filter="url(#plan-blur)"
+          />
           <path className="plan__floor" d={outlinePath} />
 
           {/* rutenett, 2 m */}

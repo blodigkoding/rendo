@@ -14,6 +14,19 @@
   --accent: #0b0b0c;
   --on-accent: #ffffff;
 
+  /* Kart og modell – hvit butikk på salviegrønn flate. */
+  --sage: #aebaa8;
+  --floor: #f7f5f1;
+  --floor-edge: #e6e3dc;
+  --shelf: #e5e2da;
+  --shelf-dim: #eeece6;
+  --shelf-dept: #e0e3db;
+  --shelf-line: #cbc8c0;
+  --wood: #c9a97b;
+  --wood-shade: #ab8a5d;
+  --map-ink: #2f3a34;
+  --map-ink-soft: #5c665e;
+
   --radius: 3px;
   --radius-lg: 14px;
   --header-h: 52px;
@@ -690,7 +703,11 @@ input {
 }
 
 .map--loading {
-  background: var(--surface);
+  background: var(--sage);
+}
+
+.map--scene {
+  background: var(--sage);
 }
 
 .map--picking {
@@ -836,58 +853,71 @@ input {
 }
 
 /* ---------- 2D-plantegning ---------- */
+/* Samme uttrykk som modellen: hvit butikk på salviegrønn flate. */
+
+.map--plan {
+  background: var(--sage);
+}
+
+.plan__shadow {
+  fill: rgba(47, 58, 52, 0.22);
+}
 
 .plan__floor {
-  fill: #fff;
-  stroke: var(--ink);
-  stroke-width: 0.08;
+  fill: var(--floor);
+  stroke: var(--floor-edge);
+  stroke-width: 0.16;
+  stroke-linejoin: round;
 }
 
 .plan__grid {
-  stroke: #f2f2f3;
-  stroke-width: 0.02;
+  stroke: #eceae4;
+  stroke-width: 0.03;
 }
 
 .plan__fixture {
-  fill: #efeff0;
-  stroke: #c9c9cd;
-  stroke-width: 0.03;
+  fill: var(--shelf);
+  stroke: var(--shelf-line);
+  stroke-width: 0.06;
+  stroke-linejoin: round;
   transition: fill 0.2s ease, stroke 0.2s ease;
 }
 
 .plan__fixture--dim {
-  fill: #f7f7f8;
-  stroke: #e4e4e7;
+  fill: var(--shelf-dim);
+  stroke: #dcd9d2;
 }
 
 .plan__fixture--dept {
-  fill: #e3e3e6;
-  stroke: #b8b8be;
+  fill: var(--shelf-dept);
+  stroke: #adb3a8;
 }
 
 .plan__fixture--target {
-  fill: var(--ink);
-  stroke: var(--ink);
+  fill: var(--map-ink);
+  stroke: var(--map-ink);
 }
 
+/* Varefronten – den tykke streken viser hvilken side man plukker fra. */
 .plan__front {
-  stroke: #b4b4ba;
-  stroke-width: 0.06;
+  stroke: var(--wood);
+  stroke-width: 0.11;
+  stroke-linecap: round;
 }
 
 .plan__front--target {
-  stroke: var(--ink);
-  stroke-width: 0.1;
+  stroke: var(--map-ink);
+  stroke-width: 0.16;
 }
 
 .plan__checkout {
-  fill: #f6f6f7;
-  stroke: #d5d5d9;
-  stroke-width: 0.03;
+  fill: var(--shelf);
+  stroke: var(--wood);
+  stroke-width: 0.08;
 }
 
 .plan__label {
-  fill: var(--ink-3);
+  fill: var(--map-ink-soft);
   font-size: 0.52px;
   letter-spacing: 0.08px;
   text-transform: uppercase;
@@ -896,18 +926,18 @@ input {
 }
 
 .plan__label--aisle {
-  fill: #a6a6ac;
+  fill: #9aa094;
   font-size: 0.62px;
 }
 
-/* Avdelingsnavn oppå reolen: tydelig, med hvit kontur så det leses over grått. */
+/* Avdelingsnavn oppå reolen: tydelig, med lys kontur så det leses over grått. */
 .plan__dept {
-  fill: var(--ink);
+  fill: var(--map-ink);
   font-size: 0.74px;
   font-weight: 600;
   letter-spacing: -0.01px;
   paint-order: stroke;
-  stroke: #fff;
+  stroke: var(--floor);
   stroke-width: 0.22px;
   stroke-linejoin: round;
   pointer-events: none;
@@ -915,57 +945,56 @@ input {
 }
 
 .plan__dept--active {
-  stroke: #fff;
   stroke-width: 0.28px;
 }
 
 .plan__door {
   fill: none;
-  stroke: var(--ink-2);
-  stroke-width: 0.09;
+  stroke: var(--wood-shade);
+  stroke-width: 0.14;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .plan__route {
   fill: none;
-  stroke: var(--ink);
-  stroke-width: 0.22;
+  stroke: var(--map-ink);
+  stroke-width: 0.34;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .plan__route-halo {
   fill: none;
-  stroke: #fff;
-  stroke-width: 0.5;
+  stroke: var(--floor);
+  stroke-width: 0.66;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .plan__route-dash {
   fill: none;
-  stroke: #fff;
-  stroke-width: 0.07;
-  stroke-dasharray: 0.28 0.34;
+  stroke: var(--floor);
+  stroke-width: 0.1;
+  stroke-dasharray: 0.3 0.4;
   stroke-linecap: round;
   animation: flow 1.6s linear infinite;
 }
 
 @keyframes flow {
   to {
-    stroke-dashoffset: -0.62;
+    stroke-dashoffset: -0.7;
   }
 }
 
 .plan__origin-ring {
   fill: none;
-  stroke: var(--ink);
-  stroke-width: 0.06;
+  stroke: var(--map-ink);
+  stroke-width: 0.1;
 }
 
 .plan__origin-dot {
-  fill: var(--ink);
+  fill: var(--map-ink);
   animation: drop 0.34s cubic-bezier(0.2, 1.5, 0.4, 1);
   transform-box: fill-box;
   transform-origin: center;
@@ -978,11 +1007,11 @@ input {
 }
 
 .plan__pin {
-  fill: var(--ink);
+  fill: var(--map-ink);
 }
 
 .plan__pin-label {
-  fill: #fff;
+  fill: var(--floor);
   font-size: 0.72px;
   font-weight: 600;
   pointer-events: none;
@@ -990,9 +1019,9 @@ input {
 
 .plan__pin-ring {
   fill: none;
-  stroke: var(--ink);
-  stroke-width: 0.05;
-  opacity: 0.45;
+  stroke: var(--map-ink);
+  stroke-width: 0.08;
+  opacity: 0.5;
 }
 
 .plan__target--done {
@@ -1685,11 +1714,26 @@ input {
   color: var(--accent);
 }
 
+.scene__floor-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--wood-shade);
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 .scene__label--target {
-  color: var(--ink);
-  background: #fff;
-  border: 1px solid var(--ink);
-  padding: 4px 7px;
-  border-radius: 6px;
-  letter-spacing: 0.06em;
+  color: #fff;
+  background: var(--map-ink);
+  border: 0;
+  padding: 5px 8px;
+  border-radius: 7px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  box-shadow: 0 2px 8px rgba(47, 58, 52, 0.25);
 }

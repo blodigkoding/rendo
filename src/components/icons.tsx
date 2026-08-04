@@ -108,6 +108,26 @@ export const PlusCircleIcon = ({ size = 16 }: IconProps) => (
   </svg>
 );
 
+export const RotateLeftIcon = ({ size = 17 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <path d="M4.5 9.5A8 8 0 1 1 4 13.5" />
+    <path d="M8.6 9.5H4.2V5" />
+  </svg>
+);
+
+export const RotateRightIcon = ({ size = 17 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <path d="M19.5 9.5A8 8 0 1 0 20 13.5" />
+    <path d="M15.4 9.5h4.4V5" />
+  </svg>
+);
+
+export const FitIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <path d="M4 9V4.5h4.5M15.5 4.5H20V9M20 15v4.5h-4.5M8.5 19.5H4V15" />
+  </svg>
+);
+
 export const MapIcon = ({ size = 20 }: IconProps) => (
   <svg {...base(size)} aria-hidden="true">
     <path d="M9 4.5L3.5 6.8v12.7L9 17.2l6 2.3 5.5-2.3V4.5L15 6.8 9 4.5z" />
