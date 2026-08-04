@@ -256,7 +256,30 @@ export function ProductArt({ product, size = 34 }: Props) {
         {/* skyggeside, så formen får volum */}
         <rect x="20" y="0" width="12" height="32" fill="#000" opacity="0.05" />
         {spec.label && (
-          <rect x="0" y={spec.label.y} width="32" height={spec.label.h} fill={label} />
+          <>
+            <rect x="0" y={spec.label.y} width="32" height={spec.label.h} fill={label} />
+            {/* Merkenavnet på etiketten – det er det som gjør en pakke gjenkjennelig. */}
+            <text
+              x="16"
+              y={spec.label.y + spec.label.h / 2 + 0.9}
+              textAnchor="middle"
+              fill="#fff"
+              fontSize={spec.label.h > 7 ? 3 : 2.4}
+              fontWeight="700"
+              letterSpacing="0.1"
+              opacity="0.9"
+            >
+              {product.brand.slice(0, 9)}
+            </text>
+            <rect
+              x="6"
+              y={spec.label.y + spec.label.h - 1.9}
+              width="20"
+              height="0.8"
+              fill="#fff"
+              opacity="0.5"
+            />
+          </>
         )}
         {spec.cap && <path d={spec.cap} fill={label} opacity="0.85" />}
       </g>

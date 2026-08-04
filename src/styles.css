@@ -1429,6 +1429,12 @@ input {
   flex: none;
   width: 46px;
   height: 46px;
+  transition: width 0.2s ease, height 0.2s ease;
+}
+
+.sheet__art--large {
+  width: 62px;
+  height: 62px;
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
@@ -1501,36 +1507,94 @@ input {
   flex: none;
 }
 
-/* plassering */
+/* plassering: hylla og hvor langt inn i gangen */
 
-.placement {
+.place {
+  padding: 4px 16px 18px;
+}
+
+.place__shelf {
   display: flex;
-  gap: 16px;
-  padding: 14px 16px 20px;
+  align-items: center;
+  gap: 18px;
+  padding: 14px 0 18px;
+}
+
+.place__text strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.place__text p {
+  margin: 2px 0 0;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.along {
+  padding-top: 16px;
   border-top: 1px solid var(--line);
 }
 
-.placement__facts {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 13px 12px;
-  align-content: start;
+.along__text strong {
+  display: block;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
 }
 
-.fact__label {
-  font-size: 10px;
-  letter-spacing: 0.005em;
+.along__text p {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+
+.along__bar {
+  position: relative;
+  height: 34px;
+  margin-top: 14px;
+}
+
+.along__run {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  border-radius: var(--round);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+.along__mark {
+  position: absolute;
+  top: 3px;
+  width: 4px;
+  height: 20px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--ink);
+}
+
+.along__end {
+  position: absolute;
+  top: 22px;
+  font-size: 11px;
   color: var(--ink-3);
 }
 
-.fact__value {
-  font-size: 14px;
-  letter-spacing: -0.01em;
-  margin-top: 1px;
+.along__end--start {
+  left: 0;
 }
 
-/* hylleillustrasjon */
+.along__end--far {
+  right: 0;
+}
+
+/* hylleillustrasjon *//* hylleillustrasjon */
 
 .shelf {
   flex: none;

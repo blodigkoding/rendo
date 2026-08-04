@@ -99,6 +99,18 @@ gondolrader på 1,25 m, ganger på 2,2–2,6 m, kjøledisker 0,9 m dype, frukt o
 grønt på lave bord rett innenfor inngangen og frysere som frittstående kummer.
 Se [planBuilder.ts](src/data/mock/planBuilder.ts).
 
+### Å finne varen i hylla
+
+Produktkortet sier to ting, og bare to: hvilken hylle varen står på og hvor
+høyt, og hvor langt inn i gangen seksjonen er. Reolrader er femten meter lange,
+så «seksjon G1-01» hjelper ingen alene – det er meterne inn i gangen, regnet fra
+enden nærmest inngangen, som forteller hvor man skal stoppe. Se `shelfPosition`
+i [geometry.ts](src/lib/geometry.ts).
+
+Ruten starter ved inngangen. Vi spør ikke hvor kunden står, for det vet man
+ikke selv når man står midt i butikken – og går man allerede, starter ruten
+der posisjonen er nå.
+
 ### Veibeskrivelse og posisjon
 
 Ruten kan spilles av i førsteperson: kameraet står i øyehøyde der kunden er og

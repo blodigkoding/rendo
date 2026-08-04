@@ -1,6 +1,6 @@
 import type { Fixture, Product } from '../data/types';
 import type { DirectionStep } from '../lib/directions';
-import { formatMeters, formatWalkTime } from '../lib/geometry';
+import { formatMeters, formatWalkTime, type ShelfPosition } from '../lib/geometry';
 import { BottomSheet, type SheetSnap } from './BottomSheet';
 import { ProductImage } from './ProductImage';
 import {
@@ -18,6 +18,8 @@ interface Props {
   product: Product;
   fixture: Fixture;
   departmentName: string;
+  /** Hvor langt inn i gangen seksjonen står. */
+  position: ShelfPosition;
   routeMeters: number | null;
   steps: DirectionStep[];
   /** Ruten er gått ferdig – da er det hylla som gjelder. */
@@ -74,11 +76,27 @@ export function ShelfDiagram({
   );
 }
 
-function Fact({ label, value }: { label: string; value: string }) {
+/**
+ * Hvor langt inn i gangen seksjonen står. Reolrader er lange, så «seksjon
+ * G1-01» sier ingenting alene – det er meterne inn i gangen man trenger.
+ */
+function AislePosition({ position, aisle }: { position: ShelfPosition; aisle: string }) {
   return (
-    <div>
-      <div className="fact__label">{label}</div>
-      <div className="fact__value">{value}</div>
+    <div className="along">
+      <div className="along__text">
+        <strong>{formatMeters(position.metersIn)} inn i {aisle.toLowerCase()}</strong>
+        <p>
+          Regnet fra enden nærmest inngangen. Seksjon {position.index} av {position.count} i raden.
+        </p>
+      </div>
+      <div className="along__bar" aria-hidden="true">
+        <span className="along__run" />
+        <span className="along__mark" style={{ left: `${position.fraction * 100}%` }} />
+        <span className="along__end along__end--start">Inngang</span>
+        <span className="along__end along__end--far">
+          {formatMeters(position.runLength)}
+        </span>
+      </div>
     </div>
   );
 }
@@ -87,6 +105,7 @@ export function ProductSheet({
   product,
   fixture,
   departmentName,
+  position,
   routeMeters,
   steps,
   arrived,
@@ -108,15 +127,13 @@ export function ProductSheet({
 
   const header = (
     <div className="sheet__head">
-      <span className="sheet__art">
-        <ProductImage product={product} size={30} />
+      <span className="sheet__art sheet__art--large">
+        <ProductImage product={product} size={44} />
       </span>
       <div className="sheet__title">
         <div className="meta">{product.brand}</div>
         <h2>{product.name}</h2>
-        <div className="sheet__where">
-          {fixture.aisle} · {fixture.code} · hylle {product.placement.level}
-        </div>
+        <div className="sheet__where">{departmentName}</div>
       </div>
       <div className="sheet__price">
         <strong>{price(product.price)}</strong>
@@ -190,24 +207,25 @@ export function ProductSheet({
       footer={footer}
       label={`Plassering av ${product.name}`}
     >
-      {arrived && (
-        <div className="arrival">
-          <ShelfDiagram levels={fixture.levels} active={product.placement.level} large />
-          <div className="arrival__text">
+      <div className="place">
+        <div className="place__shelf">
+          <ShelfDiagram levels={fixture.levels} active={product.placement.level} large={arrived} />
+          <div className="place__text">
             <strong>
               Hylle {product.placement.level} av {fixture.levels}
             </strong>
-            <p>
-              {product.placement.heightCm} cm over gulv, {product.placement.facings} fronter bredt.
-              Seksjon {fixture.code} i {fixture.aisle.toLowerCase()}.
-            </p>
-            <span className="arrival__mark">
-              <ArriveIcon size={14} />
-              Du står foran varen
-            </span>
+            <p>{product.placement.heightCm} cm over gulv</p>
+            {arrived && (
+              <span className="arrival__mark">
+                <ArriveIcon size={14} />
+                Du står foran varen
+              </span>
+            )}
           </div>
         </div>
-      )}
+
+        <AislePosition position={position} aisle={fixture.aisle} />
+      </div>
 
       {hasRoute && !arrived && (
         <ol className="steps">
@@ -222,19 +240,6 @@ export function ProductSheet({
         </ol>
       )}
 
-      <div className="placement">
-        <div className="placement__facts">
-          <Fact label="Avdeling" value={departmentName} />
-          <Fact label="Gang" value={fixture.aisle} />
-          <Fact label="Reolseksjon" value={fixture.code} />
-          <Fact label="Hylle" value={`${product.placement.level} av ${fixture.levels}`} />
-          <Fact label="Høyde" value={`${product.placement.heightCm} cm over gulv`} />
-          <Fact label="Fronter" value={String(product.placement.facings)} />
-          <Fact label="På lager" value={`${product.stock} stk`} />
-          <Fact label="EAN" value={product.ean} />
-        </div>
-        {!arrived && <ShelfDiagram levels={fixture.levels} active={product.placement.level} />}
-      </div>
     </BottomSheet>
   );
 }

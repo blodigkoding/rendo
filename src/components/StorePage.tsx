@@ -2,9 +2,8 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import { dataSource } from '../data';
 import type { Chain, Product, Store, StorePlan, Vec2 } from '../data/types';
 import { buildDirections } from '../lib/directions';
-import { fixtureAccessPoint, pathLength, productMarker } from '../lib/geometry';
+import { fixtureAccessPoint, pathLength, productMarker, shelfPosition } from '../lib/geometry';
 import { buildNavGrid, findRoute, type RouteResult } from '../lib/pathfinding';
-import { pointInPolygon } from '../lib/polygon';
 import { useShoppingList } from '../lib/shoppingList';
 import { createWalkSimulator, type Fix } from '../lib/positioning';
 import { planTour, type Tour } from '../lib/tour';
@@ -32,7 +31,6 @@ interface Props {
 }
 
 type View = '2d' | '3d';
-type PickIntent = 'single' | 'tour' | null;
 
 const SEARCHBAR_INSET = 78;
 /** Den flytende fanelinja tar plass nederst i kartet. */
@@ -54,7 +52,6 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
 
   const [product, setProduct] = useState<Product | null>(null);
   const [snap, setSnap] = useState<SheetSnap>('half');
-  const [pickIntent, setPickIntent] = useState<PickIntent>(null);
   const [origin, setOrigin] = useState<Vec2 | null>(null);
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [tour, setTour] = useState<Tour<Product> | null>(null);
@@ -133,6 +130,13 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
 
   const fixture = product ? fixtureById(product.placement.fixtureId) : null;
 
+  /** Hvor langt inn i gangen seksjonen står, regnet fra inngangen. */
+  const position = useMemo(() => {
+    if (!plan || !fixture) return null;
+    const entrance = plan.entrances[0]?.position ?? { x: 0, y: plan.depth };
+    return shelfPosition(plan.fixtures, fixture, entrance);
+  }, [plan, fixture]);
+
   const doneIds = useMemo(
     () => new Set(list.items.filter((i) => i.done).map((i) => i.productId)),
     [list.items],
@@ -192,7 +196,6 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
     setRoute(null);
     setTour(null);
     setOrigin(null);
-    setPickIntent(null);
     setArrived(false);
     setRouteError(null);
   }, []);
@@ -212,24 +215,22 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
     [clearRoute, setTab],
   );
 
-  const startPicking = useCallback((intent: Exclude<PickIntent, null>) => {
-    setRouteError(null);
-    setPickIntent(intent);
-    setTab('plan');
-    // Arket trekkes ned, så man ser butikken mens man peker ut hvor man står.
-    setSnap('peek');
-  }, []);
+  /**
+   * Vi spør ikke hvor kunden står. Ruten starter ved inngangen, som er der man
+   * kommer fra – og går man allerede, starter den der man er nå.
+   */
+  const startPoint = useCallback((): Vec2 | null => {
+    if (fix) return fix.point;
+    return plan?.entrances[0]?.position ?? null;
+  }, [fix, plan]);
 
-  const handlePick = useCallback(
-    (point: Vec2) => {
-      if (!grid || !plan) return;
+  const showRoute = useCallback(
+    (intent: 'single' | 'tour') => {
+      const point = startPoint();
+      if (!grid || !plan || !point) return;
+      setTab('plan');
 
-      if (!pointInPolygon(plan.outline, point)) {
-        setRouteError('Trykk inne i butikken.');
-        return;
-      }
-
-      if (pickIntent === 'tour') {
+      if (intent === 'tour') {
         const stops = list.items
           .filter((item) => !item.done)
           .map((item) => listProducts.get(item.productId))
@@ -241,13 +242,12 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
 
         const planned = planTour(grid, point, stops);
         if (!planned) {
-          setRouteError('Fant ingen rute innom alle varene herfra.');
+          setRouteError('Fant ingen rute innom alle varene.');
           return;
         }
         setProduct(null);
         setTour(planned);
         setOrigin(planned.legs[0].route.points[0]);
-        setPickIntent(null);
         setRouteError(null);
         setSnap('half');
         return;
@@ -256,16 +256,15 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
       if (!fixture) return;
       const found = findRoute(grid, point, fixtureAccessPoint(fixture));
       if (!found) {
-        setRouteError('Fant ingen vei dit. Prøv å trykke i en gang.');
+        setRouteError('Fant ingen vei fram til varen.');
         return;
       }
       setOrigin(found.start);
       setRoute(found);
-      setPickIntent(null);
       setRouteError(null);
       setSnap('half');
     },
-    [grid, plan, pickIntent, fixture, list.items, listProducts, fixtureById],
+    [grid, plan, startPoint, fixture, list.items, listProducts, fixtureById, setTab],
   );
 
   /** Huker av en vare underveis og legger resten av ruten fra det punktet. */
@@ -296,13 +295,12 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (tab !== 'plan') setTab('plan');
-      else if (pickIntent) setPickIntent(null);
       else if (route || tour) clearRoute();
       else if (product) setProduct(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [tab, pickIntent, route, tour, product, clearRoute]);
+  }, [tab, route, tour, product, clearRoute]);
 
   const departmentName = (id: string) => plan?.departments.find((d) => d.id === id)?.name ?? id;
 
@@ -360,9 +358,9 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
     route: routePoints && routePoints.length > 1 ? routePoints : null,
     origin,
     fix,
-    picking: pickIntent !== null,
+    picking: false,
     insets,
-    onPick: handlePick,
+    onPick: () => {},
   };
 
   return (
@@ -427,23 +425,17 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
           {view === '2d' ? <Map2D {...mapProps} /> : <Map3D {...mapProps} />}
         </Suspense>
 
-        {(pickIntent || routeError) && (
+        {routeError && (
           <div
-            className={`hint${routeError ? ' hint--error' : ''}`}
+            className="hint hint--error"
             style={{ bottom: 16 + insets.bottom }}
             role="status"
           >
             <span className="hint__pulse" aria-hidden="true" />
-            <span>
-              {routeError ??
-                (pickIntent === 'tour'
-                  ? 'Trykk der du starter handleturen'
-                  : 'Trykk på kartet der du står')}
-            </span>
+            <span>{routeError}</span>
             <button
               onClick={() => {
-                setPickIntent(null);
-                setRouteError(null);
+                            setRouteError(null);
               }}
               type="button"
             >
@@ -466,20 +458,21 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
           />
         )}
 
-        {tab === 'plan' && !tour && product && fixture && (
+        {tab === 'plan' && !tour && product && fixture && position && (
           <ProductSheet
             product={product}
             fixture={fixture}
             departmentName={departmentName(product.departmentId)}
+            position={position}
             routeMeters={routeMeters}
             steps={steps}
             arrived={arrived}
             walking={walking}
             inList={list.has(product.id)}
-            picking={pickIntent !== null}
+            picking={false}
             snap={snap}
             onSnapChange={setSnap}
-            onShowRoute={() => startPicking('single')}
+            onShowRoute={() => showRoute('single')}
             onClearRoute={clearRoute}
             onWalk={() => {
               setWalking(true);
@@ -530,7 +523,7 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
             onToggle={list.toggle}
             onRemove={list.remove}
             onSelect={selectProduct}
-            onRoute={() => startPicking('tour')}
+            onRoute={() => showRoute('tour')}
             onClear={list.clear}
           />
         )}

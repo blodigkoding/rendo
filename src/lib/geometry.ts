@@ -73,3 +73,56 @@ export function formatWalkTime(meters: number): string {
   if (seconds < 60) return `${Math.max(10, Math.round(seconds / 5) * 5)} sek`;
   return `${Math.round(seconds / 60)} min`;
 }
+
+
+/**
+ * Hvor varen står langs gangen.
+ *
+ * En reolrad kan være femten meter lang, og «seksjon G1-01» sier ingenting om
+ * hvor langt inn man må gå. Her regnes avstanden fra den enden av raden som
+ * ligger nærmest inngangen, som er den man kommer fra.
+ */
+export interface ShelfPosition {
+  /** Meter inn i gangen, fra enden nærmest inngangen. */
+  metersIn: number;
+  /** Hele radens lengde. */
+  runLength: number;
+  /** Seksjonens nummer talt fra samme ende, og hvor mange det er. */
+  index: number;
+  count: number;
+  /** Andel 0–1 langs raden – brukes til tegningen. */
+  fraction: number;
+}
+
+export function shelfPosition(
+  fixtures: Fixture[],
+  fixture: Fixture,
+  entrance: Vec2,
+): ShelfPosition {
+  // Raden man går langs: samme gang, samme side.
+  const run = fixtures.filter((f) => f.aisle === fixture.aisle && f.facing === fixture.facing);
+  const xs = run.map((f) => f.x + f.w / 2);
+  const ys = run.map((f) => f.y + f.d / 2);
+  const vertical = Math.max(...ys) - Math.min(...ys) >= Math.max(...xs) - Math.min(...xs);
+
+  const along = (f: Fixture) => (vertical ? f.y + f.d / 2 : f.x + f.w / 2);
+  const low = Math.min(...run.map(along));
+  const high = Math.max(...run.map(along));
+  const entranceAlong = vertical ? entrance.y : entrance.x;
+
+  // Nærmeste ende sett fra inngangen er den man kommer inn fra.
+  const fromLow = Math.abs(entranceAlong - low) <= Math.abs(entranceAlong - high);
+  const runLength = Math.max(0.1, high - low);
+  const here = along(fixture);
+  const metersIn = fromLow ? here - low : high - here;
+
+  const ordered = [...run].sort((a, b) => (fromLow ? along(a) - along(b) : along(b) - along(a)));
+
+  return {
+    metersIn,
+    runLength,
+    index: ordered.findIndex((f) => f.id === fixture.id) + 1,
+    count: run.length,
+    fraction: Math.min(1, Math.max(0, metersIn / runLength)),
+  };
+}
