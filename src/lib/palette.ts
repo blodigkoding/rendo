@@ -6,12 +6,14 @@
  * den samme butikken man ser fra to sider.
  */
 export const MAP_PALETTE = {
-  /** Bakgrunnen rundt butikken. */
-  sage: '#aebaa8',
-  sageShade: '#9dab97',
+  /** Flaten rundt butikken – lys og nøytral, ikke farget. */
+  backdrop: '#f1f0ec',
+  /** Salviegrønn brukes bare som detalj: inngang, planter, aksenter. */
+  sage: '#8fa389',
+  sageSoft: '#c3cebe',
   /** Selve gulvplaten. */
-  floor: '#f7f5f1',
-  floorEdge: '#e6e3dc',
+  floor: '#ffffff',
+  floorEdge: '#e4e1d9',
   /** Innredning. */
   shelf: '#e5e2da',
   shelfDim: '#eeece6',

@@ -15,7 +15,7 @@ import { ShoppingListOverlay } from './ShoppingListOverlay';
 import { StoreInfo } from './StoreInfo';
 import { TabBar, type Tab } from './TabBar';
 import { TourSheet } from './TourSheet';
-import { Wordmark } from './Wordmark';
+import { ChainLogo } from './ChainLogo';
 import { BackIcon, CubeIcon, PlanIcon, SearchIcon } from './icons';
 
 /** three.js lastes først når noen faktisk ber om 3D. */
@@ -285,8 +285,9 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
     [sheetOpen, snap, stageHeight],
   );
 
-  const accentStyle = chain
-    ? ({ '--accent': chain.accent, '--on-accent': chain.onAccent } as React.CSSProperties)
+  // Kjedefargen brukes bare i topplinja – knapper og faner er alltid sorte.
+  const chainStyle = chain
+    ? ({ '--chain': chain.accent, '--on-chain': chain.onAccent } as React.CSSProperties)
     : undefined;
 
   if (loading) {
@@ -329,7 +330,7 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
   };
 
   return (
-    <div className="store" style={accentStyle}>
+    <div className="store" style={chainStyle}>
       <header className="store__header">
         <button
           className="icon-btn"
@@ -340,7 +341,7 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
           <BackIcon />
         </button>
         <div className="store__title">
-          {chain ? <Wordmark chain={chain} large /> : <h1>{store.name}</h1>}
+          {chain ? <ChainLogo chain={chain} onColor /> : <h1>{store.name}</h1>}
           <p>
             {store.address}, {store.city} · {store.openingHours}
           </p>

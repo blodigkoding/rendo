@@ -19,6 +19,20 @@ export const GROCERY_DEPARTMENTS: Department[] = [
   { id: 'dyr', name: 'Dyr & fritid' },
 ];
 
+/** Bil, verktøy og fritid – Biltema. */
+export const AUTO_DEPARTMENTS: Department[] = [
+  { id: 'bilpleie', name: 'Bilpleie' },
+  { id: 'bildeler', name: 'Bildeler' },
+  { id: 'verktoy', name: 'Verktøy' },
+  { id: 'elverktoy', name: 'Elverktøy' },
+  { id: 'bygg', name: 'Bygg' },
+  { id: 'elektro', name: 'Elektro' },
+  { id: 'fritid', name: 'Fritid' },
+  { id: 'bat', name: 'Båt' },
+  { id: 'hage', name: 'Hage' },
+  { id: 'sykkel', name: 'Sykkel' },
+];
+
 /** Europris er en bruksvarebutikk – helt andre avdelinger. */
 export const VARIETY_DEPARTMENTS: Department[] = [
   { id: 'kjokken', name: 'Kjøkken' },
@@ -116,8 +130,64 @@ const EUROPRIS: PlanSpec = {
   entranceX: 3,
 };
 
+/** Biltema Vestby – stort varehus, høye reoler, brede ganger. */
+const BILTEMA: PlanSpec = {
+  storeId: 'st-biltema-vestby',
+  width: 44,
+  depth: 32,
+  departments: AUTO_DEPARTMENTS,
+  runY0: 6,
+  runSections: 10,
+  gondolaHeightCm: 220,
+  gondolaLevels: 6,
+  runs: [
+    { x: 7, left: { dept: 'bilpleie', aisle: 1 }, right: { dept: 'bildeler', aisle: 2 } },
+    { x: 13, left: { dept: 'verktoy', aisle: 2 }, right: { dept: 'verktoy', aisle: 3 } },
+    { x: 19, left: { dept: 'elverktoy', aisle: 3 }, right: { dept: 'bygg', aisle: 4 } },
+    { x: 25, left: { dept: 'elektro', aisle: 4 }, right: { dept: 'fritid', aisle: 5 } },
+    { x: 31, left: { dept: 'sykkel', aisle: 5 }, right: { dept: 'bat', aisle: 6 } },
+  ],
+  leftWall: { dept: 'bildeler', aisle: 1, type: 'wall', heightCm: 240, levels: 6 },
+  rightWall: { dept: 'hage', aisle: 6, type: 'wall', heightCm: 240, levels: 6 },
+  backWall: [
+    { dept: 'bygg', sections: 6, type: 'wall', heightCm: 240, levels: 5 },
+    { dept: 'hage', sections: 6, type: 'wall', heightCm: 240, levels: 5 },
+  ],
+  checkouts: 5,
+  entranceX: 4,
+};
+
+/** Clas Ohlson Ski – mindre butikk i kjøpesenter. */
+const CLAS_OHLSON: PlanSpec = {
+  storeId: 'st-clas-ohlson-ski',
+  width: 26,
+  depth: 20,
+  departments: VARIETY_DEPARTMENTS,
+  runY0: 4.5,
+  runSections: 6,
+  sectionLength: 1.8,
+  gondolaHeightCm: 190,
+  gondolaLevels: 6,
+  runs: [
+    { x: 5, left: { dept: 'kjokken', aisle: 1 }, right: { dept: 'oppbevaring', aisle: 2 } },
+    { x: 9.4, left: { dept: 'elektro', aisle: 2 }, right: { dept: 'kontor', aisle: 3 } },
+    { x: 13.8, left: { dept: 'verktoy', aisle: 3 }, right: { dept: 'rengjoring', aisle: 4 } },
+    { x: 18.2, left: { dept: 'personlig', aisle: 4 }, right: { dept: 'leker', aisle: 5 } },
+  ],
+  leftWall: { dept: 'interior', aisle: 1, type: 'wall', heightCm: 210, levels: 6 },
+  rightWall: { dept: 'tekstil', aisle: 5, type: 'wall', heightCm: 210, levels: 6 },
+  backWall: [
+    { dept: 'elektro', sections: 4, type: 'wall', heightCm: 210, levels: 5 },
+    { dept: 'sesong', sections: 3, type: 'wall', heightCm: 210, levels: 5 },
+  ],
+  checkouts: 2,
+  entranceX: 3,
+};
+
 export const PLANS: Record<string, StorePlan> = {
   [REMA.storeId]: buildPlan(REMA),
   [EXTRA.storeId]: buildPlan(EXTRA),
   [EUROPRIS.storeId]: buildPlan(EUROPRIS),
+  [BILTEMA.storeId]: buildPlan(BILTEMA),
+  [CLAS_OHLSON.storeId]: buildPlan(CLAS_OHLSON),
 };

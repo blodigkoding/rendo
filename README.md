@@ -6,8 +6,9 @@ rendo er en iPhone-app: velg butikk, søk opp en vare, se nøyaktig hvor den st�
 (gang, reolseksjon, hylle og høyde), og få veien dit fra der du står. Har du
 flere varer, legger appen én rute innom alle sammen.
 
-Demoen har tre butikker i Ås: **REMA 1000**, **Coop Extra** og **Europris** –
-hver med sin egen plan, sitt eget vareutvalg og litt av kjedens farge.
+Demoen har fem butikker: **REMA 1000 Ås**, **Coop Extra Ås**, **Europris Ås**,
+**Clas Ohlson Ski** og **Biltema Vestby** – hver med sin egen plan, sitt eget
+vareutvalg og sin egen farge i toppen.
 
 ## Kom i gang
 
@@ -101,10 +102,20 @@ fra det punktet.
 
 ### Merkevare og stil
 
-Grunnflaten er hvit, steril og monokrom. Kjeden kommer inn med akkurat tre ting:
-navnetrekket i toppen, streken under det, og hovedknappen. Kart og rute er alltid
-sort på hvitt.
+Grensesnittet er hvitt med matterte glassflater i iOS-stil. Kjedens farge brukes
+bare ett sted – topplinja med logoen. Knapper, faner og kartet er sorte og
+nøytrale, så fargen aldri konkurrerer med det man leter etter.
 
-Navnetrekkene er satt i tekst, ikke kjedenes egne logofiler – bytt dem i
-[src/components/Wordmark.tsx](src/components/Wordmark.tsx) når rettighetene er på
-plass. Adressene i demodataene er plassholdere.
+Kjedelogoene er ikke med: de er varemerker vi ikke kan hente selv. Appen tegner
+et navnetrekk i stedet. Legg offisielle filer i
+[src/assets/logoer/](src/assets/logoer/) med kjede-id som filnavn, så brukes de.
+
+Adressene i Ås er plassholdere. Clas Ohlson Ski og Biltema Vestby er lagt inn med
+de stedene kjedene faktisk har butikk i området – sjekk gatenummer mot kjedenes
+egen butikkoversikt før dette vises fram.
+
+### Etiketter
+
+All tekst i kartet tegnes i skjermplanet, ikke i selve kartet. Da har navnene
+alltid samme størrelse, de flyter ikke når man zoomer, og etiketter som ville
+lagt seg oppå hverandre skjules – i 3D vinner den som er nærmest kameraet.

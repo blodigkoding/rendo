@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Html, Line, OrbitControls } from '@react-three/drei';
+import { Line, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Fixture, StorePlan, Vec2 } from '../data/types';
 import { MAP_PALETTE as C } from '../lib/palette';
 import type { MapInsets, MapTarget, MapViewProps } from './Map2D';
+import { LabelLayer, LabelProjector, type LabelNodes, type SceneLabel } from './SceneLabels';
 import { FitIcon, RotateLeftIcon, RotateRightIcon } from './icons';
 
 /**
@@ -199,49 +200,28 @@ function Perimeter({ plan }: { plan: StorePlan }) {
 }
 
 /** Inngangen malt på gulvet. */
-function Entrances({ plan, yaw }: { plan: StorePlan; yaw: number }) {
-  const flip = Math.cos(yaw) < 0 ? Math.PI : 0;
+function Entrances({ plan }: { plan: StorePlan }) {
   return (
     <group>
       {plan.entrances.map((entrance) => (
-        <group key={entrance.id} position={toScene(entrance.position, 0.01)}>
-          <mesh rotation={[-Math.PI / 2, 0, 0]}>
-            <planeGeometry args={[3.2, 1.6]} />
-            <meshBasicMaterial color={C.wood} transparent opacity={0.55} />
-          </mesh>
-          <Html
-            transform
-            sprite={false}
-            rotation={[-Math.PI / 2, 0, flip]}
-            position={[0, 0.02, 0]}
-            scale={1.6}
-            pointerEvents="none"
-            zIndexRange={[1, 0]}
-          >
-            <div className="scene__floor-label">{entrance.name}</div>
-          </Html>
-        </group>
+        <mesh
+          key={entrance.id}
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={toScene(entrance.position, 0.01)}
+        >
+          <planeGeometry args={[3.2, 1.6]} />
+          <meshBasicMaterial color={C.sage} />
+        </mesh>
       ))}
     </group>
   );
 }
 
-/**
- * Avdelingsnavn som skilt oppå reolene. Skiltene ligger flatt i modellen, så
- * teksten må snus når man roterer rundt butikken – ellers står den på hodet.
- */
-function DepartmentLabels({
-  plan,
-  targets,
-  yaw,
-}: {
-  plan: StorePlan;
-  targets: MapTarget[];
-  yaw: number;
-}) {
+/** Avdelingsnavn og inngang, samlet som etiketter i skjermplanet. */
+function useSceneLabels(plan: StorePlan, targets: MapTarget[]): SceneLabel[] {
   const active = new Set(targets.map((t) => t.departmentId));
 
-  const labels = useMemo(() => {
+  return useMemo(() => {
     interface Group {
       dept: string;
       minX: number;
@@ -272,52 +252,33 @@ function DepartmentLabels({
       groups.set(key, group);
     }
 
-    return [...groups.entries()].map(([key, group]) => {
+    const labels: SceneLabel[] = [...groups.entries()].map(([key, group]) => {
       const vertical = group.maxZ - group.minZ > group.maxX - group.minX;
-      // De to sidene av samme rad forskyves langs raden.
-      const near = group.facing === 'west' || group.facing === 'north' ? 0.25 : 0.75;
+      const near = group.facing === 'west' || group.facing === 'north' ? 0.3 : 0.7;
       return {
         key,
-        dept: group.dept,
-        name: plan.departments.find((d) => d.id === group.dept)?.name ?? group.dept,
-        x: vertical ? (group.minX + group.maxX) / 2 : group.minX + (group.maxX - group.minX) * near,
-        z: vertical ? group.minZ + (group.maxZ - group.minZ) * near : (group.minZ + group.maxZ) / 2,
-        y: group.top + 0.1,
-        vertical,
+        text: plan.departments.find((d) => d.id === group.dept)?.name ?? group.dept,
+        position: [
+          vertical ? (group.minX + group.maxX) / 2 : group.minX + (group.maxX - group.minX) * near,
+          group.top + 0.35,
+          vertical ? group.minZ + (group.maxZ - group.minZ) * near : (group.minZ + group.maxZ) / 2,
+        ] as [number, number, number],
+        muted: targets.length > 0 && !active.has(group.dept),
       };
     });
-  }, [plan]);
 
-  // Kameraets høyre-akse: teksten skal alltid lese mot høyre på skjermen.
-  const right = { x: Math.cos(yaw), z: -Math.sin(yaw) };
+    for (const entrance of plan.entrances) {
+      labels.push({
+        key: entrance.id,
+        text: entrance.name,
+        position: [entrance.position.x, 0.9, entrance.position.y],
+        className: 'scene__tag--soft',
+      });
+    }
 
-  return (
-    <group>
-      {labels.map((label) => {
-        const along = label.vertical ? right.z : right.x;
-        const spin = (label.vertical ? -Math.PI / 2 : 0) + (along < 0 ? Math.PI : 0);
-        return (
-        <Html
-          key={label.key}
-          transform
-          sprite={false}
-          position={[label.x, label.y, label.z]}
-          rotation={[-Math.PI / 2, 0, spin]}
-          scale={2}
-          zIndexRange={[1, 0]}
-          pointerEvents="none"
-        >
-          <div
-            className={`scene__dept${active.has(label.dept) ? ' scene__dept--active' : ''}`}
-            style={{ opacity: targets.length && !active.has(label.dept) ? 0.35 : 1 }}
-          >
-            {label.name}
-          </div>
-        </Html>
-        );
-      })}
-    </group>
-  );
+    return labels;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, targets.length, [...active].join(',')]);
 }
 
 function Route({ route }: { route: Vec2[] }) {
@@ -366,12 +327,6 @@ function TargetMarker({ target }: { target: MapTarget }) {
         <sphereGeometry args={[0.16, 20, 20]} />
         <meshBasicMaterial color={C.ink} />
       </mesh>
-      <Html position={[0, pole + 0.3, 0]} center distanceFactor={undefined} zIndexRange={[2, 0]}>
-        <div className="scene__label scene__label--target">
-          {target.stop ? `${target.stop} · ` : ''}
-          {target.fixture.code} · {Math.round(target.heightCm)} cm
-        </div>
-      </Html>
     </group>
   );
 }
@@ -519,11 +474,87 @@ function Lighting({ plan }: { plan: StorePlan }) {
 
 /* --------------------------------------------------------------------- scene */
 
-export function Map3D({ plan, targets, route, origin, picking, insets, onPick }: MapViewProps) {
+function Scene({
+  plan,
+  targets,
+  route,
+  origin,
+  picking,
+  insets,
+  onPick,
+  yaw,
+  fitToken,
+  labels,
+  labelNodes,
+}: MapViewProps & {
+  yaw: number;
+  fitToken: number;
+  labels: SceneLabel[];
+  labelNodes: LabelNodes;
+}) {
+
+  return (
+    <>
+      <color attach="background" args={[C.backdrop]} />
+      <Lighting plan={plan} />
+
+      {/* underlaget modellen står på */}
+      <mesh
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[plan.width / 2, -SLAB, plan.depth / 2]}
+        receiveShadow
+      >
+        <planeGeometry args={[plan.width * 6, plan.depth * 6]} />
+        <meshStandardMaterial color={C.backdrop} roughness={1} />
+      </mesh>
+
+      {/* fanger opp trykk utenfor butikken, så brukeren får beskjed */}
+      {picking && (
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[plan.width / 2, -SLAB + 0.01, plan.depth / 2]}
+          onPointerDown={(event) => {
+            event.stopPropagation();
+            onPick({ x: event.point.x, y: event.point.z });
+          }}
+        >
+          <planeGeometry args={[plan.width * 5, plan.depth * 5]} />
+          <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+        </mesh>
+      )}
+
+      <Slab plan={plan} picking={picking} onPick={onPick} />
+      <Perimeter plan={plan} />
+      <Entrances plan={plan} />
+      <Checkouts plan={plan} />
+      <Fixtures plan={plan} targets={targets} />
+      {route && route.length > 1 && <Route route={route} />}
+      {origin && <OriginMarker origin={origin} />}
+      {targets.map((item) => (
+        <TargetMarker key={item.id} target={item} />
+      ))}
+
+      <LabelProjector labels={labels} nodes={labelNodes} />
+      <CameraRig
+        plan={plan}
+        targets={targets}
+        route={route}
+        insets={insets}
+        yaw={yaw}
+        fitToken={fitToken}
+      />
+    </>
+  );
+}
+
+export function Map3D(props: MapViewProps) {
+  const { insets, picking } = props;
   // Fire faste hjørner å se butikken fra.
   const [corner, setCorner] = useState(0);
   const [fitToken, setFitToken] = useState(0);
   const yaw = Math.PI / 4 + (corner * Math.PI) / 2;
+  const labelNodes = useRef(new Map<string, HTMLDivElement>());
+  const labels = useSceneLabels(props.plan, props.targets);
 
   return (
     <div className={`map map--scene${picking ? ' map--picking' : ''}`}>
@@ -535,55 +566,16 @@ export function Map3D({ plan, targets, route, origin, picking, insets, onPick }:
         orthographic
         camera={{ position: [40, 40, 40], zoom: 18, near: -400, far: 800 }}
       >
-        <color attach="background" args={[C.sage]} />
-        <Lighting plan={plan} />
-
-        {/* underlaget modellen står på */}
-        <mesh
-          rotation={[-Math.PI / 2, 0, 0]}
-          position={[plan.width / 2, -SLAB, plan.depth / 2]}
-          receiveShadow
-        >
-          <planeGeometry args={[plan.width * 6, plan.depth * 6]} />
-          <meshStandardMaterial color={C.sage} roughness={1} />
-        </mesh>
-
-        {/* fanger opp trykk utenfor butikken, så brukeren får beskjed */}
-        {picking && (
-          <mesh
-            rotation={[-Math.PI / 2, 0, 0]}
-            position={[plan.width / 2, -SLAB + 0.01, plan.depth / 2]}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-              onPick({ x: event.point.x, y: event.point.z });
-            }}
-          >
-            <planeGeometry args={[plan.width * 5, plan.depth * 5]} />
-            <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-          </mesh>
-        )}
-
-        <Slab plan={plan} picking={picking} onPick={onPick} />
-        <Perimeter plan={plan} />
-        <Entrances plan={plan} yaw={yaw} />
-        <Checkouts plan={plan} />
-        <Fixtures plan={plan} targets={targets} />
-        <DepartmentLabels plan={plan} targets={targets} yaw={yaw} />
-        {route && route.length > 1 && <Route route={route} />}
-        {origin && <OriginMarker origin={origin} />}
-        {targets.map((item) => (
-          <TargetMarker key={item.id} target={item} />
-        ))}
-
-        <CameraRig
-          plan={plan}
-          targets={targets}
-          route={route}
-          insets={insets}
+        <Scene
+          {...props}
           yaw={yaw}
           fitToken={fitToken}
+          labels={labels}
+          labelNodes={labelNodes}
         />
       </Canvas>
+
+      <LabelLayer labels={labels} nodes={labelNodes} />
 
       <div className="map__zoom" style={{ right: 12 + insets.right, bottom: 16 + insets.bottom }}>
         <button

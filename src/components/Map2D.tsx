@@ -458,20 +458,31 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
   const scaleMeters = 40 / transform.k;
 
   /**
-   * Skriften i planen måles i meter, så uten dette vokser den med zoomen. Her
-   * holdes den på samme skjermstørrelse, men aldri større enn reolen den står
-   * på – og zoomer man helt ut, forsvinner den i stedet for å bli grøt.
+   * Etikettene tegnes i skjermplanet, ikke i kartet. Da har skriften alltid
+   * samme størrelse og flyter ikke når man zoomer. Er man zoomet langt ut, er
+   * det ikke plass til navnene – da vises de ikke.
    */
-  const textSize = (px: number, maxMeters: number) => Math.min(maxMeters, px / transform.k);
-  const deptFont = textSize(13, 0.95);
-  const showDeptLabels = deptFont * transform.k >= 7.5;
-  const aisleFont = textSize(12, 0.85);
-  const showAisleLabels = aisleFont * transform.k >= 7;
-  const smallFont = textSize(10.5, 0.7);
-  const deptText = {
-    fontSize: deptFont,
-    strokeWidth: Math.min(0.26, textSize(3.4, 0.26)),
-  };
+  const showDeptLabels = transform.k >= 9;
+  const showAisleLabels = transform.k >= 11;
+
+  /** Etiketter som ville lagt seg oppå hverandre, dropper vi. */
+  const placedLabels = useMemo(() => {
+    if (!showDeptLabels) return [];
+    const taken: Array<{ x: number; y: number }> = [];
+    return deptLabels.filter((label) => {
+      const x = label.x * transform.k + transform.x;
+      const y = label.y * transform.k + transform.y;
+      // Loddrette navn er smale og høye, vannrette motsatt.
+      const near = taken.some((p) =>
+        label.vertical
+          ? Math.abs(p.x - x) < 26 && Math.abs(p.y - y) < 96
+          : Math.abs(p.x - x) < 110 && Math.abs(p.y - y) < 22,
+      );
+      if (near) return false;
+      taken.push({ x, y });
+      return true;
+    });
+  }, [deptLabels, showDeptLabels, transform]);
 
   return (
     <div
@@ -570,40 +581,6 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
             );
           })}
 
-          {/* avdelingsnavn – står oppå reolen de gjelder */}
-          {showDeptLabels &&
-            deptLabels.map((label) => (
-            <text
-              key={label.key}
-              className={`plan__dept${targetFixtures.size && targetDepartments.has(label.id) ? ' plan__dept--active' : ''}`}
-              x={label.x}
-              y={label.y}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              transform={label.vertical ? `rotate(-90 ${label.x} ${label.y})` : undefined}
-              opacity={hasTargets && !targetDepartments.has(label.id) ? 0.35 : 1}
-              style={deptText}
-              >
-                {label.name}
-              </text>
-            ))}
-
-          {/* gangnummer */}
-          {showAisleLabels &&
-            aisleLabels.map((label) => (
-            <text
-              key={label.name}
-              className="plan__label plan__label--aisle"
-              x={label.x}
-              y={label.y}
-              textAnchor="middle"
-              dominantBaseline="middle"
-                style={{ fontSize: aisleFont }}
-              >
-                {label.name}
-              </text>
-            ))}
-
           {/* inngang og servicepunkter */}
           {plan.entrances.map((entrance) => (
             <g key={entrance.id}>
@@ -611,29 +588,7 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
                 className="plan__door"
                 d={`M${entrance.position.x - 1.5} ${entrance.position.y + 0.9} L${entrance.position.x + 1.5} ${entrance.position.y + 0.9} M${entrance.position.x} ${entrance.position.y + 0.7} L${entrance.position.x} ${entrance.position.y - 0.5} M${entrance.position.x - 0.5} ${entrance.position.y - 0.05} L${entrance.position.x} ${entrance.position.y - 0.55} L${entrance.position.x + 0.5} ${entrance.position.y - 0.05}`}
               />
-              <text
-                className="plan__label"
-                x={entrance.position.x}
-                y={entrance.position.y - 1.15}
-                textAnchor="middle"
-                style={{ fontSize: smallFont }}
-              >
-                {entrance.name}
-              </text>
             </g>
-          ))}
-          {plan.landmarks.map((landmark) => (
-            <text
-              key={landmark.id}
-              className="plan__label"
-              x={landmark.position.x}
-              y={landmark.position.y}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              style={{ fontSize: smallFont }}
-            >
-              {landmark.name}
-            </text>
           ))}
 
           {/* rute */}
@@ -684,6 +639,54 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
           ))}
         </g>
       </svg>
+
+      <div className="map__labels" aria-hidden="true">
+        {placedLabels.map((label) => (
+            <div
+              key={label.key}
+              className={`scene__tag${hasTargets && !targetDepartments.has(label.id) ? ' scene__tag--muted' : ''}`}
+              style={{
+                transform: `translate(${label.x * transform.k + transform.x}px, ${label.y * transform.k + transform.y}px) translate(-50%, -50%)${label.vertical ? ' rotate(-90deg)' : ''}`,
+              }}
+          >
+            {label.name}
+          </div>
+        ))}
+        {showAisleLabels &&
+          aisleLabels.map((label) => (
+            <div
+              key={label.name}
+              className="scene__tag scene__tag--soft"
+              style={{
+                transform: `translate(${label.x * transform.k + transform.x}px, ${label.y * transform.k + transform.y}px) translate(-50%, -50%)`,
+              }}
+            >
+              {label.name}
+            </div>
+          ))}
+        {plan.entrances.map((entrance) => (
+          <div
+            key={entrance.id}
+            className="scene__tag scene__tag--soft"
+            style={{
+              transform: `translate(${entrance.position.x * transform.k + transform.x}px, ${(entrance.position.y - 1.4) * transform.k + transform.y}px) translate(-50%, -50%)`,
+            }}
+          >
+            {entrance.name}
+          </div>
+        ))}
+        {plan.landmarks.map((landmark) => (
+          <div
+            key={landmark.id}
+            className="scene__tag scene__tag--soft"
+            style={{
+              transform: `translate(${landmark.position.x * transform.k + transform.x}px, ${landmark.position.y * transform.k + transform.y}px) translate(-50%, -50%)`,
+            }}
+          >
+            {landmark.name}
+          </div>
+        ))}
+      </div>
 
       <div className="map__zoom" style={{ right: 12 + insets.right, bottom: 16 + insets.bottom }}>
         <button type="button" aria-label="Zoom inn" onClick={() => zoomStep(1.6)}>

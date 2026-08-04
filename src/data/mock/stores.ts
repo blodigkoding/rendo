@@ -1,6 +1,7 @@
 import type { Product, Store } from '../types';
 import { buildAssortment } from './catalog';
 import { GROCERY_CATALOG } from './catalogGrocery';
+import { AUTO_CATALOG } from './catalogAuto';
 import { VARIETY_CATALOG } from './catalogVariety';
 import { PLANS } from './plans';
 
@@ -36,6 +37,32 @@ export const DEMO_STORES: Store[] = [
     areaM2: 1064,
   },
   {
+    id: 'st-clas-ohlson-ski',
+    name: 'Clas Ohlson Ski',
+    chainId: 'clas-ohlson',
+    chain: 'Clas Ohlson',
+    address: 'Ski storsenter, Jernbaneveien 6',
+    postalCode: '1400',
+    city: 'Ski',
+    openingHours: '10–20 (10–18)',
+    distanceKm: 8.4,
+    hasMap: true,
+    areaM2: 520,
+  },
+  {
+    id: 'st-biltema-vestby',
+    name: 'Biltema Vestby',
+    chainId: 'biltema',
+    chain: 'Biltema',
+    address: 'Verpetveien 40',
+    postalCode: '1540',
+    city: 'Vestby',
+    openingHours: '08–20 (09–18)',
+    distanceKm: 12.6,
+    hasMap: true,
+    areaM2: 1408,
+  },
+  {
     id: 'st-europris-as',
     name: 'Europris Ås',
     chainId: 'europris',
@@ -54,4 +81,10 @@ export const PRODUCTS_BY_STORE: Record<string, Product[]> = {
   'st-rema-as': buildAssortment(PLANS['st-rema-as'], GROCERY_CATALOG, { priceFactor: 0.94 }),
   'st-extra-as': buildAssortment(PLANS['st-extra-as'], GROCERY_CATALOG, { priceFactor: 1 }),
   'st-europris-as': buildAssortment(PLANS['st-europris-as'], VARIETY_CATALOG, { priceFactor: 1 }),
+  'st-clas-ohlson-ski': buildAssortment(PLANS['st-clas-ohlson-ski'], VARIETY_CATALOG, {
+    priceFactor: 1.35,
+  }),
+  'st-biltema-vestby': buildAssortment(PLANS['st-biltema-vestby'], AUTO_CATALOG, {
+    priceFactor: 1,
+  }),
 };
