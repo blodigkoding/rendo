@@ -2,8 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { DeviceFrame } from './components/DeviceFrame';
 import { HomePage } from './components/HomePage';
 import { StorePage } from './components/StorePage';
+import { TabBar, type Tab } from './components/TabBar';
 
-/** Ruting: «#/butikker» er butikkvelgeren, «#/butikk/<id>» er en butikk. */
+/**
+ * Ruting: «#/butikker» er butikkvelgeren, «#/butikk/<id>/<fane>» er en butikk.
+ * Fanelinja ligger her, over alt annet, så den er den samme uansett hvor man er.
+ */
 function useHashRoute(): [string, (path: string) => void] {
   const [path, setPath] = useState(() => window.location.hash.slice(1) || '/');
 
@@ -21,43 +25,70 @@ function useHashRoute(): [string, (path: string) => void] {
 }
 
 const LAST_STORE = 'rendo:last-store';
+const STORE_TABS: Tab[] = ['plan', 'handleliste', 'profil'];
+
+function readLastStore(): string | null {
+  try {
+    return localStorage.getItem(LAST_STORE);
+  } catch {
+    return null;
+  }
+}
 
 export function App() {
   const [path, navigate] = useHashRoute();
-  const storeMatch = /^\/butikk\/([^/]+)$/.exec(path);
+  const [listCount, setListCount] = useState(0);
+
+  const storeMatch = /^\/butikk\/([^/]+)(?:\/([^/]+))?$/.exec(path);
+  const storeId = storeMatch?.[1] ?? null;
+  const routeTab = storeMatch?.[2] as Tab | undefined;
+  const tab: Tab = storeId ? (routeTab && STORE_TABS.includes(routeTab) ? routeTab : 'plan') : 'butikker';
 
   // rendo åpner der du var sist – man handler som regel i samme butikk.
   useEffect(() => {
-    if (storeMatch) {
+    if (storeId) {
       try {
-        localStorage.setItem(LAST_STORE, storeMatch[1]);
+        localStorage.setItem(LAST_STORE, storeId);
       } catch {
         // Privat modus – da starter vi i butikkvelgeren hver gang.
       }
       return;
     }
     if (path === '/') {
-      let last: string | null = null;
-      try {
-        last = localStorage.getItem(LAST_STORE);
-      } catch {
-        last = null;
-      }
+      const last = readLastStore();
       navigate(last ? `/butikk/${last}` : '/butikker');
     }
-  }, [path, storeMatch, navigate]);
+  }, [path, storeId, navigate]);
+
+  const goToTab = useCallback(
+    (next: Tab) => {
+      if (next === 'butikker') {
+        navigate('/butikker');
+        return;
+      }
+      const target = storeId ?? readLastStore();
+      // Uten en valgt butikk er det ingenting å vise – da blir det butikkvelgeren.
+      navigate(target ? `/butikk/${target}/${next}` : '/butikker');
+    },
+    [storeId, navigate],
+  );
 
   return (
     <DeviceFrame>
-      {storeMatch ? (
+      {storeId ? (
         <StorePage
-          key={storeMatch[1]}
-          storeId={storeMatch[1]}
+          key={storeId}
+          storeId={storeId}
+          tab={tab}
+          onTabChange={goToTab}
           onSwitchStore={() => navigate('/butikker')}
+          onListCount={setListCount}
         />
       ) : (
-        <HomePage onOpenStore={(storeId) => navigate(`/butikk/${storeId}`)} />
+        <HomePage onOpenStore={(id) => navigate(`/butikk/${id}/plan`)} />
       )}
+
+      <TabBar active={tab} listCount={listCount} onSelect={goToTab} />
     </DeviceFrame>
   );
 }

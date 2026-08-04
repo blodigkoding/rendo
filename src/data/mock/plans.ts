@@ -67,27 +67,45 @@ export const HOME_DEPARTMENTS: Department[] = [
   { id: 'barnerom', name: 'Barnerom' },
 ];
 
-/** REMA 1000 Ås – kompakt lavprisbutikk, fem rader. */
+
+/**
+ * Radene legges ut med fast avstand: raden er 1,25 m dyp, og gangen mellom er
+ * 2,2–2,6 m i dagligvare og opp mot 3 m i varehus. Da blir kartet like tett som
+ * butikken faktisk er.
+ */
+function runsAt(startX: number, aisle: number, sides: Array<[string, string]>) {
+  return sides.map(([left, right], i) => ({
+    x: startX + i * (1.25 + aisle),
+    left: { dept: left, aisle: i + 1 },
+    right: { dept: right, aisle: i + 2 },
+  }));
+}
+
+/** REMA 1000 Ås – lavprisbutikk med sju rader og 2,3 m ganger. */
 const REMA: PlanSpec = {
   storeId: 'st-rema-as',
   width: 30,
   depth: 24,
   departments: GROCERY_DEPARTMENTS,
-  runY0: 5,
-  runSections: 7,
-  runs: [
-    { x: 5, left: { dept: 'frukt', aisle: 1 }, right: { dept: 'bakeri', aisle: 2 } },
-    { x: 9.6, left: { dept: 'torrvarer', aisle: 2 }, right: { dept: 'hermetikk', aisle: 3 } },
-    { x: 14.2, left: { dept: 'frokost', aisle: 3 }, right: { dept: 'snacks', aisle: 4 } },
-    { x: 18.8, left: { dept: 'husholdning', aisle: 4 }, right: { dept: 'hygiene', aisle: 5 } },
-    { x: 23.4, left: { dept: 'baby', aisle: 5 }, right: { dept: 'dyr', aisle: 6 } },
-  ],
+  runY0: 4.2,
+  runSections: 12,
+  runs: runsAt(3.6, 2.3, [
+    ['bakeri', 'torrvarer'],
+    ['torrvarer', 'hermetikk'],
+    ['hermetikk', 'frokost'],
+    ['frokost', 'snacks'],
+    ['snacks', 'husholdning'],
+    ['husholdning', 'hygiene'],
+    ['baby', 'dyr'],
+  ]),
   leftWall: { dept: 'meieri', aisle: 1, type: 'cooler', heightCm: 200, levels: 6 },
-  rightWall: { dept: 'drikke', aisle: 6, type: 'wall', heightCm: 200, levels: 6 },
+  rightWall: { dept: 'drikke', aisle: 8, type: 'wall', heightCm: 200, levels: 6 },
   backWall: [
-    { dept: 'kjott', sections: 5, type: 'cooler', heightCm: 200, levels: 4 },
-    { dept: 'frys', sections: 4, type: 'freezer', heightCm: 200, levels: 5 },
+    { dept: 'kjott', sections: 6, type: 'cooler', heightCm: 200, levels: 4 },
+    { dept: 'meieri', sections: 4, type: 'cooler', heightCm: 200, levels: 5 },
   ],
+  produce: { dept: 'frukt', aisle: 1, tables: 6 },
+  freezers: { dept: 'frys', aisle: 8, units: 3, x: 25.6, y: 5 },
   checkouts: 4,
   entranceX: 3,
 };
@@ -98,25 +116,29 @@ const EXTRA: PlanSpec = {
   width: 38,
   depth: 28,
   departments: GROCERY_DEPARTMENTS,
-  runY0: 6,
-  runSections: 8,
-  runs: [
-    { x: 6, left: { dept: 'frukt', aisle: 1 }, right: { dept: 'bakeri', aisle: 2 } },
-    { x: 11, left: { dept: 'torrvarer', aisle: 2 }, right: { dept: 'torrvarer', aisle: 3 } },
-    { x: 16, left: { dept: 'hermetikk', aisle: 3 }, right: { dept: 'frokost', aisle: 4 } },
-    { x: 21, left: { dept: 'snacks', aisle: 4 }, right: { dept: 'torrvarer', aisle: 5 } },
-    { x: 26, left: { dept: 'husholdning', aisle: 5 }, right: { dept: 'hygiene', aisle: 6 } },
-    { x: 31, left: { dept: 'baby', aisle: 6 }, right: { dept: 'dyr', aisle: 7 } },
-  ],
+  runY0: 5,
+  runSections: 15,
+  runs: runsAt(4.6, 2.6, [
+    ['bakeri', 'torrvarer'],
+    ['torrvarer', 'torrvarer'],
+    ['hermetikk', 'frokost'],
+    ['frokost', 'snacks'],
+    ['snacks', 'torrvarer'],
+    ['husholdning', 'hygiene'],
+    ['baby', 'dyr'],
+    ['dyr', 'drikke'],
+  ]),
   leftWall: { dept: 'meieri', aisle: 1, type: 'cooler', heightCm: 200, levels: 6 },
-  rightWall: { dept: 'drikke', aisle: 7, type: 'wall', heightCm: 200, levels: 6 },
+  rightWall: { dept: 'drikke', aisle: 9, type: 'wall', heightCm: 200, levels: 6 },
   backWall: [
-    { dept: 'kjott', sections: 6, type: 'cooler', heightCm: 200, levels: 4 },
-    { dept: 'frys', sections: 6, type: 'freezer', heightCm: 200, levels: 5 },
+    { dept: 'kjott', sections: 7, type: 'cooler', heightCm: 200, levels: 4 },
+    { dept: 'meieri', sections: 5, type: 'cooler', heightCm: 200, levels: 5 },
   ],
+  produce: { dept: 'frukt', aisle: 1, tables: 8 },
+  freezers: { dept: 'frys', aisle: 9, units: 4, x: 33, y: 6 },
   checkouts: 6,
   entranceX: 3.6,
-  landmarks: [{ id: 'lm-pant', name: 'Pant', x: 34, y: 21.4 }],
+  landmarks: [{ id: 'lm-pant', name: 'Pant', x: 34, y: 25 }],
 };
 
 /** Europris Ås – bruksvarer, høye reoler og ingen kjøledisker. */
@@ -125,18 +147,18 @@ const EUROPRIS: PlanSpec = {
   width: 34,
   depth: 26,
   departments: VARIETY_DEPARTMENTS,
-  runY0: 5.5,
-  runSections: 8,
+  runY0: 5,
+  runSections: 14,
   gondolaHeightCm: 200,
   gondolaLevels: 6,
-  runs: [
-    { x: 5.5, left: { dept: 'kjokken', aisle: 1 }, right: { dept: 'oppbevaring', aisle: 2 } },
-    { x: 10.2, left: { dept: 'rengjoring', aisle: 2 }, right: { dept: 'personlig', aisle: 3 } },
-    { x: 14.9, left: { dept: 'godteri', aisle: 3 }, right: { dept: 'dyr', aisle: 4 } },
-    { x: 19.6, left: { dept: 'leker', aisle: 4 }, right: { dept: 'kontor', aisle: 5 } },
-    { x: 24.3, left: { dept: 'elektro', aisle: 5 }, right: { dept: 'tekstil', aisle: 6 } },
-    { x: 29, left: { dept: 'verktoy', aisle: 6 }, right: { dept: 'verktoy', aisle: 7 } },
-  ],
+  runs: runsAt(4.6, 2.5, [
+    ['kjokken', 'oppbevaring'],
+    ['rengjoring', 'personlig'],
+    ['godteri', 'dyr'],
+    ['leker', 'kontor'],
+    ['elektro', 'tekstil'],
+    ['verktoy', 'verktoy'],
+  ]),
   leftWall: { dept: 'interior', aisle: 1, type: 'wall', heightCm: 220, levels: 6 },
   backWall: [
     { dept: 'sesong', sections: 5, type: 'wall', heightCm: 220, levels: 5 },
@@ -152,19 +174,20 @@ const BILTEMA: PlanSpec = {
   width: 44,
   depth: 32,
   departments: AUTO_DEPARTMENTS,
-  runY0: 6,
-  runSections: 10,
+  runY0: 5.5,
+  runSections: 18,
   gondolaHeightCm: 220,
   gondolaLevels: 6,
-  runs: [
-    { x: 7, left: { dept: 'bilpleie', aisle: 1 }, right: { dept: 'bildeler', aisle: 2 } },
-    { x: 13, left: { dept: 'verktoy', aisle: 2 }, right: { dept: 'verktoy', aisle: 3 } },
-    { x: 19, left: { dept: 'elverktoy', aisle: 3 }, right: { dept: 'bygg', aisle: 4 } },
-    { x: 25, left: { dept: 'elektro', aisle: 4 }, right: { dept: 'fritid', aisle: 5 } },
-    { x: 31, left: { dept: 'sykkel', aisle: 5 }, right: { dept: 'bat', aisle: 6 } },
-  ],
+  runs: runsAt(5, 3, [
+    ['bilpleie', 'bildeler'],
+    ['verktoy', 'verktoy'],
+    ['elverktoy', 'bygg'],
+    ['elektro', 'fritid'],
+    ['sykkel', 'bat'],
+    ['bat', 'hage'],
+  ]),
   leftWall: { dept: 'bildeler', aisle: 1, type: 'wall', heightCm: 240, levels: 6 },
-  rightWall: { dept: 'hage', aisle: 6, type: 'wall', heightCm: 240, levels: 6 },
+  rightWall: { dept: 'hage', aisle: 8, type: 'wall', heightCm: 240, levels: 6 },
   backWall: [
     { dept: 'bygg', sections: 6, type: 'wall', heightCm: 240, levels: 5 },
     { dept: 'hage', sections: 6, type: 'wall', heightCm: 240, levels: 5 },
@@ -179,19 +202,19 @@ const CLAS_OHLSON: PlanSpec = {
   width: 26,
   depth: 20,
   departments: VARIETY_DEPARTMENTS,
-  runY0: 4.5,
-  runSections: 6,
-  sectionLength: 1.8,
+  runY0: 4,
+  runSections: 11,
   gondolaHeightCm: 190,
   gondolaLevels: 6,
-  runs: [
-    { x: 5, left: { dept: 'kjokken', aisle: 1 }, right: { dept: 'oppbevaring', aisle: 2 } },
-    { x: 9.4, left: { dept: 'elektro', aisle: 2 }, right: { dept: 'kontor', aisle: 3 } },
-    { x: 13.8, left: { dept: 'verktoy', aisle: 3 }, right: { dept: 'rengjoring', aisle: 4 } },
-    { x: 18.2, left: { dept: 'personlig', aisle: 4 }, right: { dept: 'leker', aisle: 5 } },
-  ],
+  runs: runsAt(4.2, 2.2, [
+    ['kjokken', 'oppbevaring'],
+    ['elektro', 'kontor'],
+    ['verktoy', 'rengjoring'],
+    ['personlig', 'leker'],
+    ['leker', 'tekstil'],
+  ]),
   leftWall: { dept: 'interior', aisle: 1, type: 'wall', heightCm: 210, levels: 6 },
-  rightWall: { dept: 'tekstil', aisle: 5, type: 'wall', heightCm: 210, levels: 6 },
+  rightWall: { dept: 'tekstil', aisle: 7, type: 'wall', heightCm: 210, levels: 6 },
   backWall: [
     { dept: 'elektro', sections: 4, type: 'wall', heightCm: 210, levels: 5 },
     { dept: 'sesong', sections: 3, type: 'wall', heightCm: 210, levels: 5 },
@@ -209,20 +232,19 @@ const JYSK: PlanSpec = {
   width: 36,
   depth: 28,
   departments: HOME_DEPARTMENTS,
-  runY0: 5.5,
-  runSections: 8,
-  sectionLength: 2.2,
+  runY0: 5,
+  runSections: 15,
   gondolaHeightCm: 190,
   gondolaLevels: 5,
-  runs: [
-    { x: 6, left: { dept: 'sengetoy', aisle: 1 }, right: { dept: 'dyner', aisle: 2 } },
-    { x: 11.5, left: { dept: 'bad', aisle: 2 }, right: { dept: 'gardiner', aisle: 3 } },
-    { x: 17, left: { dept: 'tepper', aisle: 3 }, right: { dept: 'belysning', aisle: 4 } },
-    { x: 22.5, left: { dept: 'oppbevaring', aisle: 4 }, right: { dept: 'barnerom', aisle: 5 } },
-    { x: 28, left: { dept: 'mobler', aisle: 5 }, right: { dept: 'utemobler', aisle: 6 } },
-  ],
+  runs: runsAt(5, 2.8, [
+    ['sengetoy', 'dyner'],
+    ['bad', 'gardiner'],
+    ['tepper', 'belysning'],
+    ['oppbevaring', 'barnerom'],
+    ['mobler', 'utemobler'],
+  ]),
   leftWall: { dept: 'madrasser', aisle: 1, type: 'wall', heightCm: 220, levels: 5 },
-  rightWall: { dept: 'utemobler', aisle: 6, type: 'wall', heightCm: 220, levels: 5 },
+  rightWall: { dept: 'utemobler', aisle: 7, type: 'wall', heightCm: 220, levels: 5 },
   backWall: [
     { dept: 'senger', sections: 6, type: 'wall', heightCm: 220, levels: 4 },
     { dept: 'madrasser', sections: 5, type: 'wall', heightCm: 220, levels: 4 },

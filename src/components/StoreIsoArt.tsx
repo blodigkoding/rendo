@@ -35,13 +35,32 @@ export function StoreIsoArt({ plan, className }: { plan: StorePlan; className?: 
     const outline = plan.outline;
     const slab = 0.6;
 
+    /**
+     * Reolseksjonene slås sammen til hele rader. I et bilde på 96 piksler ser
+     * man ikke skjøtene likevel, og det tar tegningen fra ~130 bokser til ~20.
+     */
+    const runs = new Map<string, { x: number; z: number; x2: number; z2: number; h: number }>();
+    for (const f of plan.fixtures) {
+      const key = `${f.departmentId}|${f.aisle}`;
+      const run = runs.get(key);
+      if (!run) {
+        runs.set(key, { x: f.x, z: f.y, x2: f.x + f.w, z2: f.y + f.d, h: f.heightCm / 100 });
+        continue;
+      }
+      run.x = Math.min(run.x, f.x);
+      run.z = Math.min(run.z, f.y);
+      run.x2 = Math.max(run.x2, f.x + f.w);
+      run.z2 = Math.max(run.z2, f.y + f.d);
+      run.h = Math.max(run.h, f.heightCm / 100);
+    }
+
     const boxes: Box[] = [
-      ...plan.fixtures.map((f) => ({
-        x: f.x,
-        z: f.y,
-        w: f.w,
-        d: f.d,
-        h: f.heightCm / 100,
+      ...[...runs.values()].map((r) => ({
+        x: r.x,
+        z: r.z,
+        w: r.x2 - r.x,
+        d: r.z2 - r.z,
+        h: r.h,
         top: C.wood,
         side: C.shelf,
         front: '#dcd8d0',

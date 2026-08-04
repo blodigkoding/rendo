@@ -43,11 +43,12 @@ src/
     tour.ts          Rute innom flere varer (nærmeste nabo + 2-opt)
     directions.ts    Rutepolylinje → steg-for-steg
     shoppingList.ts  Handlelista, lagret per butikk
+    positioning.ts   Hvor kunden er – simulert i dag, innendørs GPS senere
   components/
     DeviceFrame.tsx  iPhone-rammen med statuslinje og home indicator
     HomePage.tsx     Butikkvalg
     StorePage.tsx    Butikkside: søk, kart, ark, ruteflyt
-    TabBar.tsx       Fanelinja: Kart, Søk, Liste, Butikk
+    TabBar.tsx       Fanelinja: Butikker, Plan, Handleliste, Profil
     Map2D.tsx        Plantegning i SVG – pinch, treghet, dobbelttrykk
     Map3D.tsx        3D-modell (three.js), standardvisningen
     BottomSheet.tsx  Draggbart bunnark med tre høyder
@@ -90,6 +91,21 @@ varenavn og avdeling.
 
 Legg ekte foto i [src/assets/produkter/](src/assets/produkter/) med EAN eller
 varenavn som filnavn, så brukes de i stedet.
+
+### Byggeklosser
+
+Målene i planene følger norsk butikkinnredning: reolseksjoner på 1,0 m, doble
+gondolrader på 1,25 m, ganger på 2,2–2,6 m, kjøledisker 0,9 m dype, frukt og
+grønt på lave bord rett innenfor inngangen og frysere som frittstående kummer.
+Se [planBuilder.ts](src/data/mock/planBuilder.ts).
+
+### Veibeskrivelse og posisjon
+
+Ruten kan spilles av i førsteperson: kameraet står i øyehøyde der kunden er og
+ser dit man går. Posisjonen kommer fra en `PositionSource`
+([positioning.ts](src/lib/positioning.ts)). I dag er den simulert langs ruten.
+Når butikkene får faste punkter innvendig – bluetooth-fyr, UWB eller wifi – er
+det bare å bytte inn en annen kilde; resten av appen kjenner bare grensesnittet.
 
 ### Ruting
 

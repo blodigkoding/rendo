@@ -2,10 +2,30 @@ import type { Checkout, Department, Fixture, FixtureType, Rect, Room, StorePlan 
 import { buildOutline } from './outline';
 
 /**
- * Butikkplanene bygges av de samme byggeklossene en BIM-modell ville gitt oss:
- * gondolrader i midten, veggseksjoner rundt, kassesone foran og en inngang.
+ * Byggeklossene i en norsk butikk.
+ *
+ * Målene følger det som faktisk står i butikkene her hjemme:
+ *
+ *  - Reolseksjoner er 1,0 m brede. Det er modulen norsk butikkinnredning selges
+ *    i, og den som seksjonsmerkingen i hylla følger.
+ *  - En gondolrad er 1,25 m dyp, altså 0,625 m per side, og 180 cm høy i
+ *    lavprisbutikk. Veggreoler går til 200–220 cm.
+ *  - Ganger er 2,2–2,6 m. Under det kommer man ikke forbi hverandre med vogn.
+ *  - Kjøledisker langs vegg er dypere (0,9 m) enn tørrvarereoler.
+ *  - Frukt og grønt står på lave bord rett innenfor inngangen, ikke i høye
+ *    reoler – det er første avdeling i så godt som alle norske butikker.
+ *  - Frysere står som frittstående kummer i rader, ikke langs veggen.
+ *  - Kassene står på rekke langs fronten med kølist mellom inngang og utgang.
+ *
  * Hver kjede får sin egen oppskrift lenger nede i `plans.ts`.
  */
+
+/** Norsk butikkinnredning kommer i meter-moduler. */
+const SECTION = 1;
+/** Gondolrad, dobbeltsidig. */
+const RUN_DEPTH = 1.25;
+/** Kjøledisk langs vegg. */
+const COOLER_DEPTH = 0.9;
 
 export interface RunSide {
   dept: string;
@@ -35,6 +55,24 @@ export interface BackWallSegment {
   levels: number;
 }
 
+/** Lave bord med frukt og grønt, rett innenfor inngangen. */
+export interface ProduceSpec {
+  dept: string;
+  aisle: number;
+  /** Antall bord. */
+  tables: number;
+}
+
+/** Frittstående frysekummer på rekke. */
+export interface FreezerSpec {
+  dept: string;
+  aisle: number;
+  units: number;
+  /** Øverste kant på raden. */
+  y: number;
+  x: number;
+}
+
 export interface PlanSpec {
   storeId: string;
   width: number;
@@ -50,6 +88,10 @@ export interface PlanSpec {
   leftWall?: WallSpec;
   rightWall?: WallSpec;
   backWall?: BackWallSegment[];
+  /** Frukt og grønt på bord ved inngangen. */
+  produce?: ProduceSpec;
+  /** Frysekummer midt på gulvet. */
+  freezers?: FreezerSpec;
   checkouts: number;
   /** Butikken har egen disk for vareutlevering. */
   pickup?: boolean;
@@ -60,8 +102,8 @@ export interface PlanSpec {
 const pad = (n: number) => String(n).padStart(2, '0');
 
 export function buildPlan(spec: PlanSpec): StorePlan {
-  const sectionLength = spec.sectionLength ?? 2;
-  const runDepth = spec.runDepth ?? 1.2;
+  const sectionLength = spec.sectionLength ?? SECTION;
+  const runDepth = spec.runDepth ?? RUN_DEPTH;
   const gondolaHeightCm = spec.gondolaHeightCm ?? 180;
   const gondolaLevels = spec.gondolaLevels ?? 5;
 
@@ -116,7 +158,7 @@ export function buildPlan(spec: PlanSpec): StorePlan {
         facing: 'east',
         x: 0.4,
         y: spec.runY0 + i * sectionLength,
-        w: 1,
+        w: spec.leftWall.type === 'cooler' || spec.leftWall.type === 'freezer' ? COOLER_DEPTH : 0.6,
         d: sectionLength,
         heightCm: spec.leftWall.heightCm,
         levels: spec.leftWall.levels,
@@ -133,9 +175,14 @@ export function buildPlan(spec: PlanSpec): StorePlan {
         departmentId: spec.rightWall.dept,
         aisle: `Gang ${spec.rightWall.aisle}`,
         facing: 'west',
-        x: spec.width - 1.4,
+        x:
+          spec.width -
+          0.4 -
+          (spec.rightWall.type === 'cooler' || spec.rightWall.type === 'freezer'
+            ? COOLER_DEPTH
+            : 0.6),
         y: spec.runY0 + i * sectionLength,
-        w: 1,
+        w: spec.rightWall.type === 'cooler' || spec.rightWall.type === 'freezer' ? COOLER_DEPTH : 0.6,
         d: sectionLength,
         heightCm: spec.rightWall.heightCm,
         levels: spec.rightWall.levels,
@@ -160,7 +207,7 @@ export function buildPlan(spec: PlanSpec): StorePlan {
           x: 4 + index * length,
           y: 0.4,
           w: length,
-          d: 1,
+          d: segment.type === 'cooler' || segment.type === 'freezer' ? COOLER_DEPTH : 0.6,
           heightCm: segment.heightCm,
           levels: segment.levels,
         });
@@ -169,15 +216,60 @@ export function buildPlan(spec: PlanSpec): StorePlan {
     }
   }
 
+  // Frukt og grønt: lave bord rett innenfor inngangen.
+  if (spec.produce) {
+    const tableW = 1.6;
+    const tableD = 1.1;
+    for (let i = 0; i < spec.produce.tables; i++) {
+      const row = Math.floor(i / 2);
+      const column = i % 2;
+      fixtures.push({
+        id: `fx-produce-${i}`,
+        code: `FG-${pad(i + 1)}`,
+        type: 'island',
+        departmentId: spec.produce.dept,
+        aisle: `Gang ${spec.produce.aisle}`,
+        facing: 'south',
+        x: 1.6 + column * (tableW + 0.9),
+        y: spec.depth - 8.5 + row * (tableD + 1.2),
+        w: tableW,
+        d: tableD,
+        heightCm: 95,
+        levels: 2,
+      });
+    }
+  }
+
+  // Frysekummer på rekke, som midt på gulvet i en norsk butikk.
+  if (spec.freezers) {
+    for (let i = 0; i < spec.freezers.units; i++) {
+      fixtures.push({
+        id: `fx-freezer-${i}`,
+        code: `FR-${pad(i + 1)}`,
+        type: 'freezer',
+        departmentId: spec.freezers.dept,
+        aisle: `Gang ${spec.freezers.aisle}`,
+        facing: 'south',
+        x: spec.freezers.x,
+        y: spec.freezers.y + i * 1.9,
+        w: 2.1,
+        d: 1.7,
+        heightCm: 90,
+        levels: 2,
+      });
+    }
+  }
+
   const checkoutY = spec.depth - 4;
   let checkouts: Checkout[] = Array.from({ length: spec.checkouts }, (_, i) => ({
     id: `co-${i + 1}`,
     name: `Kasse ${i + 1}`,
     kind: 'checkout' as const,
-    x: 7 + i * 3,
+    // Kassepunkt med bånd: smal disk, bred køgang mellom.
+    x: 6.5 + i * 2.6,
     y: checkoutY,
-    w: 1.6,
-    d: 1.2,
+    w: 1.1,
+    d: 2.4,
   }));
 
   /**

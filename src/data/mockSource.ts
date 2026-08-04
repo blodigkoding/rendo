@@ -9,10 +9,17 @@ import { scoreMatch, type SearchField } from '../lib/search';
 const delay = <T,>(value: T, ms = 80): Promise<T> =>
   new Promise((resolve) => setTimeout(() => resolve(value), ms));
 
-const productsIn = (storeId: string) => PRODUCTS_BY_STORE[storeId] ?? [];
+/**
+ * Butikk-id-en kommer fra adressefeltet. Slår vi den rett opp i et objekt, kan
+ * «__proto__» og «constructor» gi treff som ikke er butikker – derfor Map.
+ */
+const PRODUCTS = new Map(Object.entries(PRODUCTS_BY_STORE));
+const PLAN_BY_ID = new Map(Object.entries(PLANS));
+
+const productsIn = (storeId: string) => PRODUCTS.get(storeId) ?? [];
 
 function searchFields(storeId: string, product: Product): SearchField[] {
-  const plan = PLANS[storeId];
+  const plan = PLAN_BY_ID.get(storeId);
   const fixture = plan?.fixtures.find((f) => f.id === product.placement.fixtureId);
   const department = plan?.departments.find((d) => d.id === product.departmentId);
   return [
@@ -61,7 +68,7 @@ export const mockSource: RetailDataSource = {
   },
 
   async getStorePlan(storeId) {
-    return delay(PLANS[storeId] ?? null, 110);
+    return delay(PLAN_BY_ID.get(storeId) ?? null, 110);
   },
 
   async searchProducts(storeId, query, limit = 20) {

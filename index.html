@@ -8,6 +8,17 @@
     />
     <meta name="theme-color" content="#ffffff" />
     <meta name="description" content="rendo — finn veien til varen i butikken." />
+    <!--
+      Appen laster ingenting utenfra. Denne linja stenger døra hvis noe skulle
+      snike seg inn senere. I produksjon bør den samme regelen settes som
+      HTTP-header av serveren, ikke bare her – og da også med
+      frame-ancestors, som ikke virker fra en meta-tagg.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
     <title>rendo</title>
   </head>
   <body>

@@ -22,12 +22,16 @@ interface Props {
   steps: DirectionStep[];
   /** Ruten er gått ferdig – da er det hylla som gjelder. */
   arrived: boolean;
+  /** Veibeskrivelsen spilles av med posisjon i butikken. */
+  walking: boolean;
   inList: boolean;
   picking: boolean;
   snap: SheetSnap;
   onSnapChange: (snap: SheetSnap) => void;
   onShowRoute: () => void;
   onClearRoute: () => void;
+  onWalk: () => void;
+  onStopWalk: () => void;
   onArrived: () => void;
   onToggleList: () => void;
   onClose: () => void;
@@ -86,12 +90,15 @@ export function ProductSheet({
   routeMeters,
   steps,
   arrived,
+  walking,
   inList,
   picking,
   snap,
   onSnapChange,
   onShowRoute,
   onClearRoute,
+  onWalk,
+  onStopWalk,
   onArrived,
   onToggleList,
   onClose,
@@ -141,7 +148,16 @@ export function ProductSheet({
             {formatMeters(routeMeters)} · {formatWalkTime(routeMeters)}
           </span>
         </div>
-        <button className="btn btn--sm" onClick={onArrived} type="button">
+        {walking ? (
+          <button className="btn btn--sm btn--ghost" onClick={onStopWalk} type="button">
+            Stopp
+          </button>
+        ) : (
+          <button className="btn btn--sm" onClick={onWalk} type="button">
+            Gå
+          </button>
+        )}
+        <button className="btn btn--sm btn--ghost" onClick={onArrived} type="button">
           Framme
         </button>
       </div>

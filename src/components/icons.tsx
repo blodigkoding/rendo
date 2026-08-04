@@ -128,6 +128,20 @@ export const FitIcon = ({ size = 16 }: IconProps) => (
   </svg>
 );
 
+export const BoxIcon = ({ size = 20 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <path d="M12 3.2l8 4v9.6l-8 4-8-4V7.2l8-4z" />
+    <path d="M4 7.2l8 4 8-4M12 11.2v9.6" />
+  </svg>
+);
+
+export const PersonIcon = ({ size = 20 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <circle cx="12" cy="8.4" r="3.9" />
+    <path d="M4.6 20.5a7.4 7.4 0 0 1 14.8 0" />
+  </svg>
+);
+
 export const MapIcon = ({ size = 20 }: IconProps) => (
   <svg {...base(size)} aria-hidden="true">
     <path d="M9 4.5L3.5 6.8v12.7L9 17.2l6 2.3 5.5-2.3V4.5L15 6.8 9 4.5z" />

@@ -1,6 +1,6 @@
 import type { Chain, Store, StorePlan } from '../data/types';
 import { Wordmark } from './Wordmark';
-import { ChevronRight } from './icons';
+import { BackIcon, ChevronRight } from './icons';
 
 /** «Butikk»-fanen: hva slags butikk dette er, og veien til en annen. */
 
@@ -10,6 +10,7 @@ interface Props {
   plan: StorePlan;
   productCount: number;
   onSwitchStore: () => void;
+  onClose: () => void;
   onPickDepartment: (departmentId: string) => void;
 }
 
@@ -19,12 +20,19 @@ export function StoreInfo({
   plan,
   productCount,
   onSwitchStore,
+  onClose,
   onPickDepartment,
 }: Props) {
   const aisles = new Set(plan.fixtures.map((f) => f.aisle));
 
   return (
-    <div className="overlay overlay--flat">
+    <div className="overlay">
+      <div className="overlay__bar">
+        <button className="icon-btn" onClick={onClose} aria-label="Lukk" type="button">
+          <BackIcon />
+        </button>
+        <strong style={{ flex: 1, fontWeight: 500, letterSpacing: '-0.02em' }}>Om butikken</strong>
+      </div>
       <div className="overlay__body">
         <header className="info__head">
           {chain ? <Wordmark chain={chain} large /> : null}

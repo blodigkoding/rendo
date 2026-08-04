@@ -20,10 +20,17 @@ function read(storeId: string): ListItem[] {
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (v): v is ListItem =>
-        typeof v === 'object' && v !== null && typeof (v as ListItem).productId === 'string',
-    );
+    // Innholdet kan være tuklet med utenfra appen, så alt valideres.
+    return parsed
+      .filter(
+        (v): v is ListItem =>
+          typeof v === 'object' && v !== null && typeof (v as ListItem).productId === 'string',
+      )
+      .map((item) => ({
+        productId: item.productId,
+        done: item.done === true,
+        addedAt: typeof item.addedAt === 'number' ? item.addedAt : Date.now(),
+      }));
   } catch {
     return [];
   }

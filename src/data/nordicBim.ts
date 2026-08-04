@@ -17,9 +17,16 @@ import type { RetailDataSource } from './source';
  * appen er allerede uavhengig av kilden.
  */
 
+/**
+ * NB: `apiKey` hører ikke hjemme i nettleseren. Alt som ligger i klienten er
+ * synlig for alle som åpner appen. Når integrasjonen settes opp, skal kallene gå
+ * gjennom vår egen server, som holder nøkkelen og videresender til Nordic BIM.
+ * Feltet her er bare for utvikling mot et testmiljø.
+ */
 export interface NordicBimConfig {
   baseUrl: string;
-  apiKey: string;
+  /** Kun for lokal testing – i produksjon holdes nøkkelen på server. */
+  apiKey?: string;
   /** Kundens/kjedens id i Retail Web Viewer. */
   tenantId: string;
 }

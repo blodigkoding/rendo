@@ -1,14 +1,18 @@
-import { ListIcon, MapIcon, SearchIcon, StoreIcon } from './icons';
+import { ListIcon, PersonIcon, PlanIcon, StoreIcon } from './icons';
 
-/** Fanelinja nederst. Fire steder å være: kartet, søket, lista og butikken. */
+/** Fanelinja nederst. Fire steder å være, i alle deler av appen. */
 
-export type Tab = 'kart' | 'sok' | 'liste' | 'butikk';
+export type Tab = 'butikker' | 'plan' | 'handleliste' | 'profil';
 
-const TABS: Array<{ id: Tab; label: string; icon: (props: { size?: number }) => React.ReactElement }> = [
-  { id: 'kart', label: 'Kart', icon: MapIcon },
-  { id: 'sok', label: 'Søk', icon: SearchIcon },
-  { id: 'liste', label: 'Liste', icon: ListIcon },
-  { id: 'butikk', label: 'Butikk', icon: StoreIcon },
+const TABS: Array<{
+  id: Tab;
+  label: string;
+  icon: (props: { size?: number }) => React.ReactElement;
+}> = [
+  { id: 'butikker', label: 'Butikker', icon: StoreIcon },
+  { id: 'plan', label: 'Plan', icon: PlanIcon },
+  { id: 'handleliste', label: 'Handleliste', icon: ListIcon },
+  { id: 'profil', label: 'Profil', icon: PersonIcon },
 ];
 
 interface Props {
@@ -33,7 +37,7 @@ export function TabBar({ active, listCount, onSelect }: Props) {
           >
             <span className="tabbar__icon">
               <Icon size={22} />
-              {tab.id === 'liste' && listCount > 0 && <span className="badge">{listCount}</span>}
+              {tab.id === 'handleliste' && listCount > 0 && <span className="badge">{listCount}</span>}
             </span>
             {tab.label}
           </button>

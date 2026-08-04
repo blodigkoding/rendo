@@ -1,4 +1,4 @@
-import { useRef, type RefObject } from 'react';
+import { useEffect, useRef, type RefObject } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
@@ -68,10 +68,24 @@ export function LabelProjector({
 }) {
   const { camera, size } = useThree();
   const point = useRef(new THREE.Vector3());
+  /** Å lese offsetWidth hvert bilde tvinger fram ny layout – vi måler én gang. */
+  const measured = useRef(new Map<string, { w: number; h: number }>());
+
+  useEffect(() => {
+    measured.current.clear();
+  }, [labels]);
+
+  const lastCamera = useRef('');
 
   useFrame(() => {
-    const zoom = (camera as THREE.OrthographicCamera).zoom ?? 1;
-    const visible = zoom >= minZoom;
+    // Har ikke kameraet flyttet seg, står etikettene der de står.
+    const stamp = `${camera.matrixWorld.elements.join(',')}|${(camera as THREE.OrthographicCamera).zoom}`;
+    if (stamp === lastCamera.current) return;
+    lastCamera.current = stamp;
+
+    // I førstepersonsvisning er kameraet perspektivisk og har ingen zoom.
+    const ortho = camera as THREE.OrthographicCamera;
+    const visible = !ortho.isOrthographicCamera || ortho.zoom >= minZoom;
 
     const placed: Array<{ key: string; depth: number; box: Box; x: number; y: number }> = [];
 
@@ -81,8 +95,12 @@ export function LabelProjector({
       point.current.set(...label.position).project(camera);
       const x = (point.current.x * 0.5 + 0.5) * size.width;
       const y = (-point.current.y * 0.5 + 0.5) * size.height;
-      const w = element.offsetWidth;
-      const h = element.offsetHeight;
+      let box = measured.current.get(label.key);
+      if (!box) {
+        box = { w: element.offsetWidth, h: element.offsetHeight };
+        if (box.w > 0) measured.current.set(label.key, box);
+      }
+      const { w, h } = box;
       placed.push({
         key: label.key,
         depth: point.current.z,

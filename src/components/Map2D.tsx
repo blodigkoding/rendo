@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Fixture, StorePlan, Vec2 } from '../data/types';
 import { FACING_VECTOR, rectCenter } from '../lib/geometry';
 import { toPathData } from '../lib/polygon';
+import type { Fix } from '../lib/positioning';
 import { MinusIcon, PlusIcon } from './icons';
 
 /** En vare kartet skal peke ut. Handlelista gir flere om gangen. */
@@ -31,6 +32,8 @@ export interface MapViewProps {
   targets: MapTarget[];
   route: Vec2[] | null;
   origin: Vec2 | null;
+  /** Hvor kunden er akkurat nå, når veibeskrivelsen spilles av. */
+  fix?: Fix | null;
   picking: boolean;
   insets: MapInsets;
   onPick: (point: Vec2) => void;
@@ -110,7 +113,7 @@ function useAnnotations(plan: StorePlan) {
   }, [plan]);
 }
 
-export function Map2D({ plan, targets, route, origin, picking, insets, onPick }: MapViewProps) {
+export function Map2D({ plan, targets, route, origin, fix, picking, insets, onPick }: MapViewProps) {
   const targetFixtures = useMemo(() => new Set(targets.map((t) => t.fixture.id)), [targets]);
   const targetDepartments = useMemo(() => new Set(targets.map((t) => t.departmentId)), [targets]);
   const hasTargets = targets.length > 0;
@@ -472,6 +475,123 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
 
   const routePath = route && route.length > 1 ? route.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(' ') : null;
   const outlinePath = toPathData(plan.outline);
+
+  /**
+   * Innredningen henger bare sammen med planen og hva som er valgt – ikke med
+   * panorering og zoom. Uten dette bygges fire hundre SVG-noder på nytt for
+   * hvert bilde man drar kartet.
+   */
+  const staticLayers = useMemo(
+    () => (
+      <>
+          {/* kasser */}
+        {plan.checkouts.map((counter) => (
+          <g key={counter.id}>
+            <rect
+              className="plan__checkout"
+              x={counter.x}
+              y={counter.y}
+              width={counter.w}
+              height={counter.d}
+              rx={0.12}
+            />
+            <line
+              className="plan__belt"
+              x1={counter.x + 0.2}
+              y1={counter.y + counter.d / 2}
+              x2={counter.x + counter.w - 0.5}
+              y2={counter.y + counter.d / 2}
+            />
+          </g>
+        ))}
+
+        {/* lukkede rom, som lageret bak vareutleveringen */}
+        {plan.rooms.map((room) => {
+          const vertical = room.opening.side === 'west' || room.opening.side === 'east';
+          const wallX = room.opening.side === 'west' ? room.x : room.x + room.w;
+          const wallY = room.opening.side === 'north' ? room.y : room.y + room.d;
+          const from = room.opening.at;
+          const to = room.opening.at + room.opening.width;
+          return (
+            <g key={room.id}>
+              <rect
+                className="plan__room"
+                x={room.x}
+                y={room.y}
+                width={room.w}
+                height={room.d}
+              />
+              <line
+                className="plan__opening"
+                x1={vertical ? wallX : room.x + from}
+                y1={vertical ? room.y + from : wallY}
+                x2={vertical ? wallX : room.x + to}
+                y2={vertical ? room.y + to : wallY}
+              />
+            </g>
+          );
+        })}
+
+        {/* reolseksjoner */}
+        {plan.fixtures.map((fixture) => {
+          const isTarget = targetFixtures.has(fixture.id);
+          const inDept = targetDepartments.has(fixture.departmentId);
+          const className = isTarget
+            ? 'plan__fixture plan__fixture--target'
+            : inDept
+              ? 'plan__fixture plan__fixture--dept'
+              : hasTargets
+                ? 'plan__fixture plan__fixture--dim'
+                : 'plan__fixture';
+
+          const n = FACING_VECTOR[fixture.facing];
+          const front =
+            n.x !== 0
+              ? {
+                  x1: n.x > 0 ? fixture.x + fixture.w : fixture.x,
+                  y1: fixture.y,
+                  x2: n.x > 0 ? fixture.x + fixture.w : fixture.x,
+                  y2: fixture.y + fixture.d,
+                }
+              : {
+                  x1: fixture.x,
+                  y1: n.y > 0 ? fixture.y + fixture.d : fixture.y,
+                  x2: fixture.x + fixture.w,
+                  y2: n.y > 0 ? fixture.y + fixture.d : fixture.y,
+                };
+
+          return (
+            <g key={fixture.id}>
+              <rect
+                className={className}
+                x={fixture.x}
+                y={fixture.y}
+                width={fixture.w}
+                height={fixture.d}
+              />
+              <line
+                className={isTarget ? 'plan__front plan__front--target' : 'plan__front'}
+                {...front}
+              />
+            </g>
+          );
+        })}
+
+        {/* inngang og servicepunkter */}
+        {plan.entrances.map((entrance) => (
+          <g key={entrance.id}>
+            <path
+              className="plan__door"
+              d={`M${entrance.position.x - 1.5} ${entrance.position.y + 0.9} L${entrance.position.x + 1.5} ${entrance.position.y + 0.9} M${entrance.position.x} ${entrance.position.y + 0.7} L${entrance.position.x} ${entrance.position.y - 0.5} M${entrance.position.x - 0.5} ${entrance.position.y - 0.05} L${entrance.position.x} ${entrance.position.y - 0.55} L${entrance.position.x + 0.5} ${entrance.position.y - 0.05}`}
+            />
+          </g>
+        ))}
+
+      </>
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [plan, targetKey, hasTargets],
+  );
   const scaleMeters = 40 / transform.k;
 
   /**
@@ -541,108 +661,7 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
             ))}
           </g>
 
-          {/* kasser */}
-          {plan.checkouts.map((counter) => (
-            <g key={counter.id}>
-              <rect
-                className="plan__checkout"
-                x={counter.x}
-                y={counter.y}
-                width={counter.w}
-                height={counter.d}
-                rx={0.12}
-              />
-              <line
-                className="plan__belt"
-                x1={counter.x + 0.2}
-                y1={counter.y + counter.d / 2}
-                x2={counter.x + counter.w - 0.5}
-                y2={counter.y + counter.d / 2}
-              />
-            </g>
-          ))}
-
-          {/* lukkede rom, som lageret bak vareutleveringen */}
-          {plan.rooms.map((room) => {
-            const vertical = room.opening.side === 'west' || room.opening.side === 'east';
-            const wallX = room.opening.side === 'west' ? room.x : room.x + room.w;
-            const wallY = room.opening.side === 'north' ? room.y : room.y + room.d;
-            const from = room.opening.at;
-            const to = room.opening.at + room.opening.width;
-            return (
-              <g key={room.id}>
-                <rect
-                  className="plan__room"
-                  x={room.x}
-                  y={room.y}
-                  width={room.w}
-                  height={room.d}
-                />
-                <line
-                  className="plan__opening"
-                  x1={vertical ? wallX : room.x + from}
-                  y1={vertical ? room.y + from : wallY}
-                  x2={vertical ? wallX : room.x + to}
-                  y2={vertical ? room.y + to : wallY}
-                />
-              </g>
-            );
-          })}
-
-          {/* reolseksjoner */}
-          {plan.fixtures.map((fixture) => {
-            const isTarget = targetFixtures.has(fixture.id);
-            const inDept = targetDepartments.has(fixture.departmentId);
-            const className = isTarget
-              ? 'plan__fixture plan__fixture--target'
-              : inDept
-                ? 'plan__fixture plan__fixture--dept'
-                : hasTargets
-                  ? 'plan__fixture plan__fixture--dim'
-                  : 'plan__fixture';
-
-            const n = FACING_VECTOR[fixture.facing];
-            const front =
-              n.x !== 0
-                ? {
-                    x1: n.x > 0 ? fixture.x + fixture.w : fixture.x,
-                    y1: fixture.y,
-                    x2: n.x > 0 ? fixture.x + fixture.w : fixture.x,
-                    y2: fixture.y + fixture.d,
-                  }
-                : {
-                    x1: fixture.x,
-                    y1: n.y > 0 ? fixture.y + fixture.d : fixture.y,
-                    x2: fixture.x + fixture.w,
-                    y2: n.y > 0 ? fixture.y + fixture.d : fixture.y,
-                  };
-
-            return (
-              <g key={fixture.id}>
-                <rect
-                  className={className}
-                  x={fixture.x}
-                  y={fixture.y}
-                  width={fixture.w}
-                  height={fixture.d}
-                />
-                <line
-                  className={isTarget ? 'plan__front plan__front--target' : 'plan__front'}
-                  {...front}
-                />
-              </g>
-            );
-          })}
-
-          {/* inngang og servicepunkter */}
-          {plan.entrances.map((entrance) => (
-            <g key={entrance.id}>
-              <path
-                className="plan__door"
-                d={`M${entrance.position.x - 1.5} ${entrance.position.y + 0.9} L${entrance.position.x + 1.5} ${entrance.position.y + 0.9} M${entrance.position.x} ${entrance.position.y + 0.7} L${entrance.position.x} ${entrance.position.y - 0.5} M${entrance.position.x - 0.5} ${entrance.position.y - 0.05} L${entrance.position.x} ${entrance.position.y - 0.55} L${entrance.position.x + 0.5} ${entrance.position.y - 0.05}`}
-              />
-            </g>
-          ))}
+          {staticLayers}
 
           {/* rute */}
           {routePath && (
@@ -653,8 +672,20 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
             </g>
           )}
 
+          {/* der man er nå, mens man går */}
+          {fix && (
+            <g>
+              <circle className="plan__origin-ring" cx={fix.point.x} cy={fix.point.y} r={0.7} />
+              <circle className="plan__origin-dot" cx={fix.point.x} cy={fix.point.y} r={0.32} />
+              <path
+                className="plan__heading"
+                d={`M${fix.point.x + Math.cos(fix.heading) * 1.5} ${fix.point.y + Math.sin(fix.heading) * 1.5} L${fix.point.x + Math.cos(fix.heading + 2.5) * 0.55} ${fix.point.y + Math.sin(fix.heading + 2.5) * 0.55} L${fix.point.x + Math.cos(fix.heading - 2.5) * 0.55} ${fix.point.y + Math.sin(fix.heading - 2.5) * 0.55} Z`}
+              />
+            </g>
+          )}
+
           {/* startpunkt */}
-          {origin && (
+          {!fix && origin && (
             <g>
               <circle className="plan__origin-ring" cx={origin.x} cy={origin.y} r={0.62} />
               <circle className="plan__origin-dot" cx={origin.x} cy={origin.y} r={0.26} />

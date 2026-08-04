@@ -13,8 +13,10 @@ import { BackIcon, CheckIcon, PlusCircleIcon, SearchIcon } from './icons';
 interface Props {
   storeId: string;
   plan: StorePlan;
-  /** Åpne rett i en avdeling, f.eks. fra butikkfanen. */
+  /** Åpne rett i en avdeling, f.eks. fra butikkinfo. */
   initialDepartmentId?: string | null;
+  /** Åpne med et søk allerede fylt inn, f.eks. fra siste søk. */
+  initialQuery?: string;
   inList: (productId: string) => boolean;
   onAdd: (productId: string) => void;
   onSelect: (product: Product) => void;
@@ -25,12 +27,13 @@ export function SearchOverlay({
   storeId,
   plan,
   initialDepartmentId,
+  initialQuery = '',
   inList,
   onAdd,
   onSelect,
   onClose,
 }: Props) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<Product[]>([]);
   const [searching, setSearching] = useState(false);
   const [department, setDepartment] = useState<Department | null>(
@@ -216,7 +219,7 @@ export function SearchOverlay({
                       aria-label={`Legg ${product.name} i handlelista`}
                       type="button"
                     >
-                      {inList(product.id) ? <CheckIcon size={15} /> : <PlusCircleIcon size={17} />}
+                      {inList(product.id) ? <CheckIcon size={19} /> : <PlusCircleIcon size={24} />}
                     </button>
                   </li>
                 ))}

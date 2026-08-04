@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Line, OrbitControls } from '@react-three/drei';
+import { Line, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import type { Checkout, Fixture, StorePlan, Vec2 } from '../data/types';
+import type { Checkout, StorePlan, Vec2 } from '../data/types';
 import { MAP_PALETTE as C } from '../lib/palette';
 import type { MapInsets, MapTarget, MapViewProps } from './Map2D';
 import { LabelLayer, LabelProjector, type LabelNodes, type SceneLabel } from './SceneLabels';
+import type { Fix } from '../lib/positioning';
 import { FitIcon, RotateLeftIcon, RotateRightIcon } from './icons';
 
 /**
@@ -34,80 +35,96 @@ function directionFor(yaw: number) {
 
 /* ---------------------------------------------------------------- innredning */
 
-function FixtureMesh({
-  fixture,
-  state,
-}: {
-  fixture: Fixture;
-  state: 'plain' | 'dim' | 'dept' | 'target';
-}) {
-  const height = fixture.heightCm / 100;
-  const plinth = 0.12;
-  const cap = 0.06;
-  const body = Math.max(0.1, height - plinth - cap);
-  const cx = fixture.x + fixture.w / 2;
-  const cz = fixture.y + fixture.d / 2;
+const PLINTH = 0.12;
+const CAP = 0.06;
 
-  const bodyColor =
-    state === 'target' ? C.ink : state === 'dept' ? C.shelfDept : state === 'dim' ? C.shelfDim : C.shelf;
-
-  return (
-    <group position={[cx, 0, cz]}>
-      {/* sokkel */}
-      <mesh position={[0, plinth / 2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[fixture.w * 0.96, plinth, fixture.d * 0.96]} />
-        <meshStandardMaterial color={state === 'target' ? C.ink : C.floorEdge} roughness={0.9} />
-      </mesh>
-
-      {/* selve reolen */}
-      <mesh position={[0, plinth + body / 2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[fixture.w, body, fixture.d]} />
-        <meshStandardMaterial color={bodyColor} roughness={0.92} />
-      </mesh>
-
-      {/* treplate på topp – gir varmen fra referansen og markerer overkanten */}
-      <mesh position={[0, plinth + body + cap / 2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[fixture.w * 1.04, cap, fixture.d * 1.04]} />
-        <meshStandardMaterial
-          color={state === 'target' ? C.ink : C.wood}
-          roughness={0.75}
-        />
-      </mesh>
-    </group>
-  );
-}
-
+/**
+ * Reolene tegnes som tre instansierte objekter – sokler, kropper og treplater –
+ * i stedet for tre hundre enkeltbokser. Det er forskjellen på 40 og 60 bilder i
+ * sekundet på en telefon.
+ */
 function Fixtures({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) {
-  const targetFixtures = new Set(targets.map((t) => t.fixture.id));
-  const targetDepartments = new Set(targets.map((t) => t.departmentId));
-  const hasTargets = targets.length > 0;
+  const plinths = useRef<THREE.InstancedMesh>(null);
+  const bodies = useRef<THREE.InstancedMesh>(null);
+  const caps = useRef<THREE.InstancedMesh>(null);
+
+  const count = plan.fixtures.length;
+  const targetFixtures = useMemo(() => new Set(targets.map((t) => t.fixture.id)), [targets]);
+  const targetDepartments = useMemo(() => new Set(targets.map((t) => t.departmentId)), [targets]);
+
+  // Plassering endres bare når planen gjør det.
+  useEffect(() => {
+    const matrix = new THREE.Matrix4();
+    const place = (
+      mesh: THREE.InstancedMesh | null,
+      height: (f: (typeof plan.fixtures)[number]) => number,
+      y: (f: (typeof plan.fixtures)[number]) => number,
+      inset: number,
+    ) => {
+      if (!mesh) return;
+      plan.fixtures.forEach((f, i) => {
+        matrix.compose(
+          new THREE.Vector3(f.x + f.w / 2, y(f), f.y + f.d / 2),
+          new THREE.Quaternion(),
+          new THREE.Vector3(f.w * inset, height(f), f.d * inset),
+        );
+        mesh.setMatrixAt(i, matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingSphere();
+    };
+
+    const body = (f: (typeof plan.fixtures)[number]) =>
+      Math.max(0.1, f.heightCm / 100 - PLINTH - CAP);
+
+    place(plinths.current, () => PLINTH, () => PLINTH / 2, 0.96);
+    place(bodies.current, body, (f) => PLINTH + body(f) / 2, 1);
+    place(caps.current, () => CAP, (f) => PLINTH + body(f) + CAP / 2, 1.04);
+  }, [plan]);
+
+  // Fargene endres når man velger en vare.
+  useEffect(() => {
+    const colour = new THREE.Color();
+    plan.fixtures.forEach((f, i) => {
+      const isTarget = targetFixtures.has(f.id);
+      const inDept = targetDepartments.has(f.departmentId);
+      const shelf = isTarget
+        ? C.ink
+        : inDept
+          ? C.shelfDept
+          : targetFixtures.size > 0
+            ? C.shelfDim
+            : C.shelf;
+      bodies.current?.setColorAt(i, colour.set(shelf));
+      plinths.current?.setColorAt(i, colour.set(isTarget ? C.ink : C.floorEdge));
+      caps.current?.setColorAt(i, colour.set(isTarget ? C.ink : C.wood));
+    });
+    for (const mesh of [bodies.current, plinths.current, caps.current]) {
+      if (mesh?.instanceColor) mesh.instanceColor.needsUpdate = true;
+    }
+  }, [plan, targetFixtures, targetDepartments]);
 
   return (
     <group>
-      {plan.fixtures.map((fixture) => (
-        <FixtureMesh
-          key={fixture.id}
-          fixture={fixture}
-          state={
-            targetFixtures.has(fixture.id)
-              ? 'target'
-              : targetDepartments.has(fixture.departmentId)
-                ? 'dept'
-                : hasTargets
-                  ? 'dim'
-                  : 'plain'
-          }
-        />
-      ))}
+      <instancedMesh ref={plinths} args={[undefined, undefined, count]} castShadow receiveShadow>
+        <boxGeometry />
+        <meshStandardMaterial roughness={0.9} />
+      </instancedMesh>
+      <instancedMesh ref={bodies} args={[undefined, undefined, count]} castShadow receiveShadow>
+        <boxGeometry />
+        <meshStandardMaterial roughness={0.92} />
+      </instancedMesh>
+      <instancedMesh ref={caps} args={[undefined, undefined, count]} castShadow receiveShadow>
+        <boxGeometry />
+        <meshStandardMaterial roughness={0.75} />
+      </instancedMesh>
     </group>
   );
 }
 
 /**
- * Kassene og vareutleveringen.
- *
- * En kasse er en benk med samlebånd, terminal og skjerm – nok detalj til at man
- * kjenner den igjen ovenfra. Vareutleveringen er en bredere disk med luke bak.
+ * En kasse: benk med treplate, samlebånd og terminal. Nok detalj til at man
+ * kjenner den igjen ovenfra.
  */
 function Counter({ counter }: { counter: Checkout }) {
   const height = 0.9;
@@ -126,25 +143,18 @@ function Counter({ counter }: { counter: Checkout }) {
 
   return (
     <group position={[counter.x + counter.w / 2, 0, counter.y + counter.d / 2]}>
-      {/* benken */}
       <mesh position={[0, height / 2, 0]} castShadow receiveShadow>
         <boxGeometry args={[counter.w, height, counter.d]} />
         <meshStandardMaterial color={C.shelf} roughness={0.92} />
       </mesh>
-
-      {/* benkeplate i tre */}
       <mesh position={[0, height + 0.03, 0]} castShadow receiveShadow>
         <boxGeometry args={[counter.w * 1.06, 0.06, counter.d * 1.1]} />
         <meshStandardMaterial color={C.wood} roughness={0.75} />
       </mesh>
-
-      {/* samlebånd */}
       <mesh position={[belt[0], height + 0.08, belt[2]]}>
         <boxGeometry args={size3(along * 0.6, 0.03, across * 0.5)} />
         <meshStandardMaterial color={C.ink} roughness={0.6} />
       </mesh>
-
-      {/* terminal med skjerm */}
       <group position={terminal}>
         <mesh position={[0, height + 0.22, 0]} castShadow>
           <boxGeometry args={size3(0.36, 0.36, 0.34)} />
@@ -500,6 +510,44 @@ function TargetMarker({ target }: { target: MapTarget }) {
   );
 }
 
+/**
+ * Førstepersonsvisning: kameraet står i øyehøyde der kunden er, og ser dit man
+ * går. Posisjonen kommer fra `PositionSource` – i dag simulert, senere fra
+ * faste punkter i butikken.
+ */
+function FirstPerson({ fix }: { fix: Fix }) {
+  const camera = useRef<THREE.PerspectiveCamera>(null);
+  const look = useRef(new THREE.Vector3());
+  const eye = 1.62;
+
+  useFrame((_, delta) => {
+    const cam = camera.current;
+    if (!cam) return;
+    const lerp = Math.min(1, delta * 8);
+    cam.position.lerp(new THREE.Vector3(fix.point.x, eye, fix.point.y), lerp);
+    look.current.lerp(
+      new THREE.Vector3(
+        fix.point.x + Math.cos(fix.heading) * 4,
+        eye - 0.25,
+        fix.point.y + Math.sin(fix.heading) * 4,
+      ),
+      lerp,
+    );
+    cam.lookAt(look.current);
+  });
+
+  return (
+    <PerspectiveCamera
+      ref={camera}
+      makeDefault
+      fov={72}
+      near={0.05}
+      far={200}
+      position={[fix.point.x, eye, fix.point.y]}
+    />
+  );
+}
+
 /* -------------------------------------------------------------------- kamera */
 
 interface RigProps {
@@ -608,6 +656,14 @@ function CameraRig({ plan, targets, route, insets, yaw, fitToken }: RigProps) {
       return;
     }
     const ortho = camera as THREE.OrthographicCamera;
+    // Står kameraet der det skal, er det ingenting å regne på.
+    const settled =
+      camera.position.distanceToSquared(desiredPosition.current) < 0.0004 &&
+      Math.abs(ortho.zoom - desiredZoom.current) < 0.01;
+    if (settled) {
+      controls.current?.update();
+      return;
+    }
     const lerp = Math.min(1, delta * 3.4);
     camera.position.lerp(desiredPosition.current, lerp);
     ortho.zoom += (desiredZoom.current - ortho.zoom) * lerp;
@@ -645,8 +701,20 @@ function CameraRig({ plan, targets, route, insets, yaw, fitToken }: RigProps) {
 
 /* ---------------------------------------------------------------------- lys */
 
-function Lighting({ plan }: { plan: StorePlan }) {
+function Lighting({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) {
   const span = Math.max(plan.width, plan.depth);
+  const { gl } = useThree();
+
+  // Butikken står stille. Skyggene trenger bare regnes ut når noe faktisk
+  // endrer seg, ikke seksti ganger i sekundet.
+  useEffect(() => {
+    gl.shadowMap.autoUpdate = false;
+    gl.shadowMap.needsUpdate = true;
+    return () => {
+      gl.shadowMap.autoUpdate = true;
+    };
+  }, [gl, plan, targets]);
+
   return (
     <>
       <ambientLight intensity={1.35} />
@@ -654,7 +722,7 @@ function Lighting({ plan }: { plan: StorePlan }) {
         castShadow
         position={[plan.width * 0.9, span * 1.1, plan.depth * 1.25]}
         intensity={1.5}
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]}
         shadow-bias={-0.0006}
         shadow-camera-left={-span}
         shadow-camera-right={span}
@@ -678,6 +746,7 @@ function Scene({
   picking,
   insets,
   onPick,
+  fix,
   yaw,
   fitToken,
   labels,
@@ -692,7 +761,7 @@ function Scene({
   return (
     <>
       <color attach="background" args={[C.backdrop]} />
-      <Lighting plan={plan} />
+      <Lighting plan={plan} targets={targets} />
 
       {/* underlaget modellen står på */}
       <mesh
@@ -732,14 +801,18 @@ function Scene({
       ))}
 
       <LabelProjector labels={labels} nodes={labelNodes} />
-      <CameraRig
+      {fix ? (
+        <FirstPerson fix={fix} />
+      ) : (
+        <CameraRig
         plan={plan}
         targets={targets}
         route={route}
         insets={insets}
-        yaw={yaw}
-        fitToken={fitToken}
-      />
+          yaw={yaw}
+          fitToken={fitToken}
+        />
+      )}
     </>
   );
 }
@@ -774,6 +847,7 @@ export function Map3D(props: MapViewProps) {
 
       <LabelLayer labels={labels} nodes={labelNodes} />
 
+      {!props.fix && (
       <div className="map__zoom" style={{ right: 12 + insets.right, bottom: 16 + insets.bottom }}>
         <button
           type="button"
@@ -793,6 +867,7 @@ export function Map3D(props: MapViewProps) {
           <FitIcon />
         </button>
       </div>
+      )}
     </div>
   );
 }

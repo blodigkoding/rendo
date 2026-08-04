@@ -42,14 +42,30 @@ export function buildNavGrid(plan: StorePlan): NavGrid {
     ...plan.rooms.map((r) => inflate(r, CLEARANCE)),
   ];
 
+  // Innredningen males rett inn i rutenettet. Å teste hver rute mot hver reol
+  // ville vært hundretusenvis av sjekker; her går vi bare over rutene hver reol
+  // faktisk dekker.
+  for (const rect of obstacles) {
+    const i0 = Math.max(0, Math.floor(rect.x / CELL));
+    const i1 = Math.min(cols - 1, Math.ceil((rect.x + rect.w) / CELL));
+    const j0 = Math.max(0, Math.floor(rect.y / CELL));
+    const j1 = Math.min(rows - 1, Math.ceil((rect.y + rect.d) / CELL));
+    for (let j = j0; j <= j1; j++) {
+      for (let i = i0; i <= i1; i++) {
+        if (inRect(rect, (i + 0.5) * CELL, (j + 0.5) * CELL)) blocked[j * cols + i] = 1;
+      }
+    }
+  }
+
+  // Så veggen: alt utenfor polygonet, eller for nær kanten.
   for (let j = 0; j < rows; j++) {
     for (let i = 0; i < cols; i++) {
+      const index = j * cols + i;
+      if (blocked[index]) continue;
       const point = { x: (i + 0.5) * CELL, y: (j + 0.5) * CELL };
-      // Utenfor veggen, for nær veggen, eller inni innredningen.
-      const outside =
-        !pointInPolygon(plan.outline, point) || distanceToEdge(plan.outline, point) < WALL_MARGIN;
-      const hit = outside || obstacles.some((r) => inRect(r, point.x, point.y));
-      if (hit) blocked[j * cols + i] = 1;
+      if (!pointInPolygon(plan.outline, point) || distanceToEdge(plan.outline, point) < WALL_MARGIN) {
+        blocked[index] = 1;
+      }
     }
   }
 

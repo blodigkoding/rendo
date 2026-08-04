@@ -6,14 +6,16 @@ import { fixtureAccessPoint, pathLength, productMarker } from '../lib/geometry';
 import { buildNavGrid, findRoute, type RouteResult } from '../lib/pathfinding';
 import { pointInPolygon } from '../lib/polygon';
 import { useShoppingList } from '../lib/shoppingList';
+import { createWalkSimulator, type Fix } from '../lib/positioning';
 import { planTour, type Tour } from '../lib/tour';
 import { sheetHeight, type SheetSnap } from './BottomSheet';
 import { Map2D, type MapInsets, type MapTarget } from './Map2D';
 import { ProductSheet } from './ProductSheet';
 import { SearchOverlay } from './SearchOverlay';
-import { ShoppingListOverlay } from './ShoppingListOverlay';
+import { ProfilePage } from './ProfilePage';
+import { ShoppingListPage } from './ShoppingListPage';
 import { StoreInfo } from './StoreInfo';
-import { TabBar, type Tab } from './TabBar';
+import type { Tab } from './TabBar';
 import { TourSheet } from './TourSheet';
 import { ChainLogo } from './ChainLogo';
 import { BackIcon, CubeIcon, PlanIcon, SearchIcon } from './icons';
@@ -23,7 +25,10 @@ const Map3D = lazy(() => import('./Map3D').then((module) => ({ default: module.M
 
 interface Props {
   storeId: string;
+  tab: Tab;
+  onTabChange: (tab: Tab) => void;
   onSwitchStore: () => void;
+  onListCount: (count: number) => void;
 }
 
 type View = '2d' | '3d';
@@ -33,7 +38,7 @@ const SEARCHBAR_INSET = 78;
 /** Den flytende fanelinja tar plass nederst i kartet. */
 const TABBAR_INSET = 84;
 
-export function StorePage({ storeId, onSwitchStore }: Props) {
+export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCount }: Props) {
   const [store, setStore] = useState<Store | null>(null);
   const [chain, setChain] = useState<Chain | null>(null);
   const [plan, setPlan] = useState<StorePlan | null>(null);
@@ -41,8 +46,11 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
 
   // 3D er standardvisningen – det er der man kjenner igjen butikken.
   const [view, setView] = useState<View>('3d');
-  const [tab, setTab] = useState<Tab>('kart');
   const [browseDepartment, setBrowseDepartment] = useState<string | null>(null);
+  const [initialQuery, setInitialQuery] = useState('');
+  const [storeInfoOpen, setStoreInfoOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const setTab = onTabChange;
 
   const [product, setProduct] = useState<Product | null>(null);
   const [snap, setSnap] = useState<SheetSnap>('half');
@@ -51,6 +59,8 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [tour, setTour] = useState<Tour<Product> | null>(null);
   const [arrived, setArrived] = useState(false);
+  const [walking, setWalking] = useState(false);
+  const [fix, setFix] = useState<Fix | null>(null);
   const [routeError, setRouteError] = useState<string | null>(null);
 
   const list = useShoppingList(storeId);
@@ -163,7 +173,22 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
   const routeMeters = route ? pathLength(route.points) : null;
   const tourMeters = tour ? pathLength(tour.points) : 0;
 
+  const routePoints = tour ? tour.points : route ? route.points : null;
+
+  // Veibeskrivelsen spilles av fra en posisjonskilde. I dag er den simulert;
+  // når butikken har faste punkter innvendig byttes kilden ut her.
+  useEffect(() => {
+    if (!walking || !routePoints || routePoints.length < 2) return;
+    const source = createWalkSimulator(routePoints);
+    return source.subscribe(setFix);
+  }, [walking, routePoints]);
+
+  useEffect(() => {
+    if (!walking) setFix(null);
+  }, [walking]);
+
   const clearRoute = useCallback(() => {
+    setWalking(false);
     setRoute(null);
     setTour(null);
     setOrigin(null);
@@ -172,21 +197,25 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
     setRouteError(null);
   }, []);
 
+  /** Velger man en vare, skal man se den i planen – ikke bli stående i søket. */
   const selectProduct = useCallback(
     (next: Product) => {
       setProduct(next);
-      setTab('kart');
+      setSearchOpen(false);
+      setStoreInfoOpen(false);
       setBrowseDepartment(null);
+      setInitialQuery('');
       setSnap('half');
       clearRoute();
+      setTab('plan');
     },
-    [clearRoute],
+    [clearRoute, setTab],
   );
 
   const startPicking = useCallback((intent: Exclude<PickIntent, null>) => {
     setRouteError(null);
     setPickIntent(intent);
-    setTab('kart');
+    setTab('plan');
     // Arket trekkes ned, så man ser butikken mens man peker ut hvor man står.
     setSnap('peek');
   }, []);
@@ -266,7 +295,7 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (tab !== 'kart') setTab('kart');
+      if (tab !== 'plan') setTab('plan');
       else if (pickIntent) setPickIntent(null);
       else if (route || tour) clearRoute();
       else if (product) setProduct(null);
@@ -277,7 +306,9 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
 
   const departmentName = (id: string) => plan?.departments.find((d) => d.id === id)?.name ?? id;
 
-  const sheetOpen = Boolean(product || tour) && tab === 'kart';
+  useEffect(() => onListCount(list.items.length), [list.items.length, onListCount]);
+
+  const sheetOpen = Boolean(product || tour) && tab === 'plan';
   const insets: MapInsets = useMemo(
     () => ({
       top: SEARCHBAR_INSET,
@@ -326,8 +357,9 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
   const mapProps = {
     plan,
     targets,
-    route: tour ? (tour.points.length > 1 ? tour.points : null) : route ? route.points : null,
+    route: routePoints && routePoints.length > 1 ? routePoints : null,
     origin,
+    fix,
     picking: pickIntent !== null,
     insets,
     onPick: handlePick,
@@ -344,12 +376,17 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
         >
           <BackIcon />
         </button>
-        <div className="store__title">
+        <button
+          className="store__title"
+          onClick={() => setStoreInfoOpen(true)}
+          type="button"
+          aria-label="Om butikken"
+        >
           {chain ? <ChainLogo chain={chain} onColor /> : <h1>{store.name}</h1>}
           <p>
             {store.address}, {store.city} · {store.openingHours}
           </p>
-        </div>
+        </button>
       </header>
 
       <div className="store__stage" ref={stageRef}>
@@ -357,7 +394,7 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
           <button
             className="searchbar"
             data-filled={Boolean(product)}
-            onClick={() => setTab('sok')}
+            onClick={() => setSearchOpen(true)}
             type="button"
           >
             <SearchIcon />
@@ -415,7 +452,7 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
           </div>
         )}
 
-        {tab === 'kart' && tour && (
+        {tab === 'plan' && tour && (
           <TourSheet
             tour={tour}
             plan={plan}
@@ -429,7 +466,7 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
           />
         )}
 
-        {tab === 'kart' && !tour && product && fixture && (
+        {tab === 'plan' && !tour && product && fixture && (
           <ProductSheet
             product={product}
             fixture={fixture}
@@ -437,13 +474,21 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
             routeMeters={routeMeters}
             steps={steps}
             arrived={arrived}
+            walking={walking}
             inList={list.has(product.id)}
             picking={pickIntent !== null}
             snap={snap}
             onSnapChange={setSnap}
             onShowRoute={() => startPicking('single')}
             onClearRoute={clearRoute}
+            onWalk={() => {
+              setWalking(true);
+              setView('3d');
+              setSnap('peek');
+            }}
+            onStopWalk={() => setWalking(false)}
             onArrived={() => {
+              setWalking(false);
               setArrived(true);
               setSnap('half');
             }}
@@ -457,51 +502,69 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
           />
         )}
 
-        {tab === 'sok' && (
+        {searchOpen && (
           <SearchOverlay
             storeId={storeId}
             plan={plan}
             initialDepartmentId={browseDepartment}
+            initialQuery={initialQuery}
             inList={list.has}
             onAdd={list.add}
             onSelect={selectProduct}
             onClose={() => {
-              setTab('kart');
+              setSearchOpen(false);
               setBrowseDepartment(null);
+              setInitialQuery('');
             }}
           />
         )}
 
-        {tab === 'liste' && (
-          <ShoppingListOverlay
+        {tab === 'handleliste' && (
+          <ShoppingListPage
+            storeId={storeId}
+            plan={plan}
             items={list.items}
             products={listProducts}
-            plan={plan}
+            has={list.has}
+            onAdd={list.add}
             onToggle={list.toggle}
             onRemove={list.remove}
             onSelect={selectProduct}
             onRoute={() => startPicking('tour')}
             onClear={list.clear}
-            onClose={() => setTab('kart')}
           />
         )}
 
-        {tab === 'butikk' && (
+        {tab === 'profil' && (
+          <ProfilePage
+            store={store}
+            chain={chain}
+            listCount={list.items.length}
+            onOpenList={() => setTab('handleliste')}
+            onSearch={(term) => {
+              setInitialQuery(term);
+              setSearchOpen(true);
+            }}
+            onSwitchStore={onSwitchStore}
+            onOpenStoreInfo={() => setStoreInfoOpen(true)}
+          />
+        )}
+
+        {storeInfoOpen && (
           <StoreInfo
             store={store}
             chain={chain}
             plan={plan}
             productCount={productCount}
             onSwitchStore={onSwitchStore}
+            onClose={() => setStoreInfoOpen(false)}
             onPickDepartment={(departmentId) => {
+              setStoreInfoOpen(false);
               setBrowseDepartment(departmentId);
-              setTab('sok');
+              setTab('handleliste');
             }}
           />
         )}
-
-
-        <TabBar active={tab} listCount={list.items.length} onSelect={setTab} />
       </div>
     </div>
   );
