@@ -2,6 +2,7 @@ import type { Product, Store } from '../types';
 import { buildAssortment } from './catalog';
 import { GROCERY_CATALOG } from './catalogGrocery';
 import { AUTO_CATALOG } from './catalogAuto';
+import { HOME_CATALOG } from './catalogHome';
 import { VARIETY_CATALOG } from './catalogVariety';
 import { PLANS } from './plans';
 
@@ -50,6 +51,20 @@ export const DEMO_STORES: Store[] = [
     areaM2: 520,
   },
   {
+    id: 'st-jysk-vinterbro',
+    name: 'JYSK Vinterbro',
+    chainId: 'jysk',
+    chain: 'JYSK',
+    address: 'Vinterbrosenteret, Nordreveien 4',
+    postalCode: '1407',
+    city: 'Vinterbro',
+    openingHours: '10–20 (10–18)',
+    distanceKm: 6.8,
+    hasMap: true,
+    areaM2: 1008,
+    services: ['Vareutlevering', 'Klikk og hent'],
+  },
+  {
     id: 'st-biltema-vestby',
     name: 'Biltema Vestby',
     chainId: 'biltema',
@@ -61,6 +76,7 @@ export const DEMO_STORES: Store[] = [
     distanceKm: 12.6,
     hasMap: true,
     areaM2: 1408,
+    services: ['Vareutlevering'],
   },
   {
     id: 'st-europris-as',
@@ -85,6 +101,9 @@ export const PRODUCTS_BY_STORE: Record<string, Product[]> = {
     priceFactor: 1.35,
   }),
   'st-biltema-vestby': buildAssortment(PLANS['st-biltema-vestby'], AUTO_CATALOG, {
+    priceFactor: 1,
+  }),
+  'st-jysk-vinterbro': buildAssortment(PLANS['st-jysk-vinterbro'], HOME_CATALOG, {
     priceFactor: 1,
   }),
 };

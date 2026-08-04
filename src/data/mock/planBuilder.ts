@@ -51,6 +51,8 @@ export interface PlanSpec {
   rightWall?: WallSpec;
   backWall?: BackWallSegment[];
   checkouts: number;
+  /** Butikken har egen disk for vareutlevering. */
+  pickup?: boolean;
   entranceX: number;
   landmarks?: Array<{ id: string; name: string; x: number; y: number }>;
 }
@@ -171,11 +173,25 @@ export function buildPlan(spec: PlanSpec): StorePlan {
   const checkouts: Checkout[] = Array.from({ length: spec.checkouts }, (_, i) => ({
     id: `co-${i + 1}`,
     name: `Kasse ${i + 1}`,
+    kind: 'checkout' as const,
     x: 7 + i * 3,
     y: checkoutY,
     w: 1.6,
     d: 1.2,
   }));
+
+  // Vareutlevering står for seg selv, til side for kassene.
+  if (spec.pickup) {
+    checkouts.push({
+      id: 'co-pickup',
+      name: 'Vareutlevering',
+      kind: 'pickup',
+      x: spec.width - 9,
+      y: checkoutY - 0.4,
+      w: 4.2,
+      d: 1.6,
+    });
+  }
 
   const entrance = { x: spec.entranceX, y: spec.depth - 1.4 };
 

@@ -51,6 +51,22 @@ export const VARIETY_DEPARTMENTS: Department[] = [
   { id: 'verktoy', name: 'Verktøy' },
 ];
 
+/** Møbler og innredning – JYSK. */
+export const HOME_DEPARTMENTS: Department[] = [
+  { id: 'senger', name: 'Senger' },
+  { id: 'madrasser', name: 'Madrasser' },
+  { id: 'sengetoy', name: 'Sengetøy' },
+  { id: 'dyner', name: 'Dyner & puter' },
+  { id: 'mobler', name: 'Møbler' },
+  { id: 'oppbevaring', name: 'Oppbevaring' },
+  { id: 'bad', name: 'Bad' },
+  { id: 'gardiner', name: 'Gardiner' },
+  { id: 'tepper', name: 'Tepper' },
+  { id: 'belysning', name: 'Belysning' },
+  { id: 'utemobler', name: 'Utemøbler' },
+  { id: 'barnerom', name: 'Barnerom' },
+];
+
 /** REMA 1000 Ås – kompakt lavprisbutikk, fem rader. */
 const REMA: PlanSpec = {
   storeId: 'st-rema-as',
@@ -184,10 +200,43 @@ const CLAS_OHLSON: PlanSpec = {
   entranceX: 3,
 };
 
+/**
+ * JYSK Vinterbro – møbelbutikk med utstilling i midten og vareutlevering
+ * ved siden av kassene.
+ */
+const JYSK: PlanSpec = {
+  storeId: 'st-jysk-vinterbro',
+  width: 36,
+  depth: 28,
+  departments: HOME_DEPARTMENTS,
+  runY0: 5.5,
+  runSections: 8,
+  sectionLength: 2.2,
+  gondolaHeightCm: 190,
+  gondolaLevels: 5,
+  runs: [
+    { x: 6, left: { dept: 'sengetoy', aisle: 1 }, right: { dept: 'dyner', aisle: 2 } },
+    { x: 11.5, left: { dept: 'bad', aisle: 2 }, right: { dept: 'gardiner', aisle: 3 } },
+    { x: 17, left: { dept: 'tepper', aisle: 3 }, right: { dept: 'belysning', aisle: 4 } },
+    { x: 22.5, left: { dept: 'oppbevaring', aisle: 4 }, right: { dept: 'barnerom', aisle: 5 } },
+    { x: 28, left: { dept: 'mobler', aisle: 5 }, right: { dept: 'utemobler', aisle: 6 } },
+  ],
+  leftWall: { dept: 'madrasser', aisle: 1, type: 'wall', heightCm: 220, levels: 5 },
+  rightWall: { dept: 'utemobler', aisle: 6, type: 'wall', heightCm: 220, levels: 5 },
+  backWall: [
+    { dept: 'senger', sections: 6, type: 'wall', heightCm: 220, levels: 4 },
+    { dept: 'madrasser', sections: 5, type: 'wall', heightCm: 220, levels: 4 },
+  ],
+  checkouts: 3,
+  pickup: true,
+  entranceX: 3.5,
+};
+
 export const PLANS: Record<string, StorePlan> = {
   [REMA.storeId]: buildPlan(REMA),
   [EXTRA.storeId]: buildPlan(EXTRA),
   [EUROPRIS.storeId]: buildPlan(EUROPRIS),
   [BILTEMA.storeId]: buildPlan(BILTEMA),
   [CLAS_OHLSON.storeId]: buildPlan(CLAS_OHLSON),
+  [JYSK.storeId]: buildPlan(JYSK),
 };

@@ -57,6 +57,8 @@ export interface Store {
   /** Om butikken har en publisert BIM-plan i rendo. */
   hasMap: boolean;
   areaM2?: number;
+  /** Tjenester i butikken, f.eks. vareutlevering. */
+  services?: string[];
 }
 
 export interface Department {
@@ -138,9 +140,13 @@ export interface Landmark {
   position: Vec2;
 }
 
+/** Disker foran i butikken: kasser, kundeservice og vareutlevering. */
+export type CounterKind = 'checkout' | 'pickup' | 'service';
+
 export interface Checkout extends Rect {
   id: string;
   name: string;
+  kind: CounterKind;
 }
 
 export interface StorePlan {

@@ -944,7 +944,20 @@ input {
 .plan__checkout {
   fill: var(--shelf);
   stroke: var(--wood);
-  stroke-width: 0.08;
+  stroke-width: 0.09;
+}
+
+.plan__checkout--pickup {
+  fill: var(--shelf-dept);
+  stroke: var(--map-ink);
+  stroke-width: 0.11;
+}
+
+.plan__belt {
+  stroke: var(--map-ink);
+  stroke-width: 0.14;
+  stroke-linecap: round;
+  opacity: 0.55;
 }
 
 .plan__label {

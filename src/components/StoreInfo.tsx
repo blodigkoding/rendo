@@ -63,6 +63,19 @@ export function StoreInfo({
           </div>
         </div>
 
+        {store.services && store.services.length > 0 && (
+          <div className="block">
+            <div className="block__title meta">Tjenester</div>
+            <div className="chips">
+              {store.services.map((service) => (
+                <span key={service} className="chip">
+                  {service}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="block">
           <div className="block__title meta">Avdelinger</div>
           <div className="dept-grid">

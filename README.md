@@ -6,9 +6,10 @@ rendo er en iPhone-app: velg butikk, søk opp en vare, se nøyaktig hvor den st�
 (gang, reolseksjon, hylle og høyde), og få veien dit fra der du står. Har du
 flere varer, legger appen én rute innom alle sammen.
 
-Demoen har fem butikker: **REMA 1000 Ås**, **Coop Extra Ås**, **Europris Ås**,
-**Clas Ohlson Ski** og **Biltema Vestby** – hver med sin egen plan, sitt eget
-vareutvalg og sin egen farge i toppen.
+Demoen har seks butikker: **REMA 1000 Ås**, **Coop Extra Ås**, **Europris Ås**,
+**JYSK Vinterbro**, **Clas Ohlson Ski** og **Biltema Vestby** – hver med sin egen
+plan, sitt eget vareutvalg og sin egen farge i toppen. JYSK og Biltema har
+vareutlevering, som står som egen disk i kartet.
 
 ## Kom i gang
 

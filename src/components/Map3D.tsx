@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Line, OrbitControls } from '@react-three/drei';
 import * as THREE from 'three';
-import type { Fixture, StorePlan, Vec2 } from '../data/types';
+import type { Checkout, Fixture, StorePlan, Vec2 } from '../data/types';
 import { MAP_PALETTE as C } from '../lib/palette';
 import type { MapInsets, MapTarget, MapViewProps } from './Map2D';
 import { LabelLayer, LabelProjector, type LabelNodes, type SceneLabel } from './SceneLabels';
@@ -103,23 +103,87 @@ function Fixtures({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) 
   );
 }
 
+/**
+ * Kassene og vareutleveringen.
+ *
+ * En kasse er en benk med samlebånd, terminal og skjerm – nok detalj til at man
+ * kjenner den igjen ovenfra. Vareutleveringen er en bredere disk med luke bak.
+ */
+function Counter({ counter }: { counter: Checkout }) {
+  const isPickup = counter.kind === 'pickup';
+  const height = isPickup ? 1.05 : 0.9;
+  const along = Math.max(counter.w, counter.d);
+  const across = Math.min(counter.w, counter.d);
+  const lengthwise = counter.w >= counter.d;
+
+  /** Legger et element langs disken, uansett hvilken vei den står. */
+  const along3 = (a: number, b: number): [number, number, number] =>
+    lengthwise ? [a, 0, b] : [b, 0, a];
+  const size3 = (a: number, b: number, h: number): [number, number, number] =>
+    lengthwise ? [a, h, b] : [b, h, a];
+
+  const belt = along3(-along * 0.12, 0);
+  const terminal = along3(along * 0.34, 0);
+
+  return (
+    <group position={[counter.x + counter.w / 2, 0, counter.y + counter.d / 2]}>
+      {/* benken */}
+      <mesh position={[0, height / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[counter.w, height, counter.d]} />
+        <meshStandardMaterial color={C.shelf} roughness={0.92} />
+      </mesh>
+
+      {/* benkeplate i tre */}
+      <mesh position={[0, height + 0.03, 0]} castShadow receiveShadow>
+        <boxGeometry args={[counter.w * 1.06, 0.06, counter.d * 1.1]} />
+        <meshStandardMaterial color={C.wood} roughness={0.75} />
+      </mesh>
+
+      {isPickup ? (
+        <>
+          {/* luke bak disken */}
+          <mesh
+            position={along3(0, -across * 0.9)}
+            castShadow
+            receiveShadow
+          >
+            <boxGeometry args={size3(along * 0.9, 0.18, 2.1)} />
+            <meshStandardMaterial color={C.floorEdge} roughness={1} />
+          </mesh>
+          <mesh position={[0, 1.4, 0]}>
+            <boxGeometry args={size3(along * 0.5, 0.05, 0.06)} />
+            <meshBasicMaterial color={C.sage} />
+          </mesh>
+        </>
+      ) : (
+        <>
+          {/* samlebånd */}
+          <mesh position={[belt[0], height + 0.08, belt[2]]}>
+            <boxGeometry args={size3(along * 0.6, 0.03, across * 0.5)} />
+            <meshStandardMaterial color={C.ink} roughness={0.6} />
+          </mesh>
+          {/* terminal med skjerm */}
+          <group position={terminal}>
+            <mesh position={[0, height + 0.22, 0]} castShadow>
+              <boxGeometry args={size3(0.36, 0.36, 0.34)} />
+              <meshStandardMaterial color={C.floorEdge} roughness={0.9} />
+            </mesh>
+            <mesh position={[0, height + 0.46, 0]} castShadow>
+              <boxGeometry args={size3(0.3, 0.22, 0.05)} />
+              <meshStandardMaterial color={C.ink} roughness={0.5} />
+            </mesh>
+          </group>
+        </>
+      )}
+    </group>
+  );
+}
+
 function Checkouts({ plan }: { plan: StorePlan }) {
   return (
     <group>
-      {plan.checkouts.map((checkout) => (
-        <group
-          key={checkout.id}
-          position={[checkout.x + checkout.w / 2, 0, checkout.y + checkout.d / 2]}
-        >
-          <mesh position={[0, 0.45, 0]} castShadow receiveShadow>
-            <boxGeometry args={[checkout.w, 0.9, checkout.d]} />
-            <meshStandardMaterial color={C.shelf} roughness={0.92} />
-          </mesh>
-          <mesh position={[0, 0.93, 0]} castShadow receiveShadow>
-            <boxGeometry args={[checkout.w * 1.08, 0.06, checkout.d * 1.12]} />
-            <meshStandardMaterial color={C.wood} roughness={0.75} />
-          </mesh>
-        </group>
+      {plan.checkouts.map((counter) => (
+        <Counter key={counter.id} counter={counter} />
       ))}
     </group>
   );
@@ -266,6 +330,16 @@ function useSceneLabels(plan: StorePlan, targets: MapTarget[]): SceneLabel[] {
         muted: targets.length > 0 && !active.has(group.dept),
       };
     });
+
+    for (const counter of plan.checkouts) {
+      if (counter.kind === 'checkout' && counter.id !== 'co-1') continue;
+      labels.push({
+        key: counter.id,
+        text: counter.kind === 'checkout' ? 'Kasser' : counter.name,
+        position: [counter.x + counter.w / 2, 1.6, counter.y + counter.d / 2],
+        className: 'scene__tag--soft',
+      });
+    }
 
     for (const entrance of plan.entrances) {
       labels.push({

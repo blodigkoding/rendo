@@ -34,6 +34,13 @@ export const CHAINS: Chain[] = [
     wordmark: { text: 'BILTEMA', letterSpacing: '0.02em', weight: 800 },
   },
   {
+    id: 'jysk',
+    name: 'JYSK',
+    accent: '#00397e',
+    onAccent: '#ffffff',
+    wordmark: { text: 'JYSK', letterSpacing: '0.04em', weight: 800 },
+  },
+  {
     id: 'clas-ohlson',
     name: 'Clas Ohlson',
     accent: '#0f4c8a',
