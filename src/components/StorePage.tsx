@@ -4,6 +4,7 @@ import type { Chain, Product, Store, StorePlan, Vec2 } from '../data/types';
 import { buildDirections } from '../lib/directions';
 import { fixtureAccessPoint, pathLength, productMarker } from '../lib/geometry';
 import { buildNavGrid, findRoute, type RouteResult } from '../lib/pathfinding';
+import { pointInPolygon } from '../lib/polygon';
 import { useShoppingList } from '../lib/shoppingList';
 import { planTour, type Tour } from '../lib/tour';
 import { sheetHeight, type SheetSnap } from './BottomSheet';
@@ -11,16 +12,18 @@ import { Map2D, type MapInsets, type MapTarget } from './Map2D';
 import { ProductSheet } from './ProductSheet';
 import { SearchOverlay } from './SearchOverlay';
 import { ShoppingListOverlay } from './ShoppingListOverlay';
+import { StoreInfo } from './StoreInfo';
+import { TabBar, type Tab } from './TabBar';
 import { TourSheet } from './TourSheet';
 import { Wordmark } from './Wordmark';
-import { BackIcon, CubeIcon, ListIcon, SearchIcon } from './icons';
+import { BackIcon, CubeIcon, PlanIcon, SearchIcon } from './icons';
 
 /** three.js lastes først når noen faktisk ber om 3D. */
 const Map3D = lazy(() => import('./Map3D').then((module) => ({ default: module.Map3D })));
 
 interface Props {
   storeId: string;
-  onBack: () => void;
+  onSwitchStore: () => void;
 }
 
 type View = '2d' | '3d';
@@ -28,15 +31,16 @@ type PickIntent = 'single' | 'tour' | null;
 
 const SEARCHBAR_INSET = 74;
 
-export function StorePage({ storeId, onBack }: Props) {
+export function StorePage({ storeId, onSwitchStore }: Props) {
   const [store, setStore] = useState<Store | null>(null);
   const [chain, setChain] = useState<Chain | null>(null);
   const [plan, setPlan] = useState<StorePlan | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [view, setView] = useState<View>('2d');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [listOpen, setListOpen] = useState(false);
+  // 3D er standardvisningen – det er der man kjenner igjen butikken.
+  const [view, setView] = useState<View>('3d');
+  const [tab, setTab] = useState<Tab>('kart');
+  const [browseDepartment, setBrowseDepartment] = useState<string | null>(null);
 
   const [product, setProduct] = useState<Product | null>(null);
   const [snap, setSnap] = useState<SheetSnap>('half');
@@ -49,6 +53,7 @@ export function StorePage({ storeId, onBack }: Props) {
 
   const list = useShoppingList(storeId);
   const [listProducts, setListProducts] = useState<Map<string, Product>>(new Map());
+  const [productCount, setProductCount] = useState(0);
 
   // Callback-ref: elementet finnes først når butikken er lastet, så en vanlig
   // useEffect på mount ville aldri fått tak i det.
@@ -78,6 +83,13 @@ export function StorePage({ storeId, onBack }: Props) {
       setPlan(planResult);
       setChain(chainResult);
       setLoading(false);
+
+      if (planResult) {
+        const perDepartment = await Promise.all(
+          planResult.departments.map((d) => dataSource.getProductsInDepartment(storeId, d.id)),
+        );
+        if (active) setProductCount(perDepartment.reduce((sum, list) => sum + list.length, 0));
+      }
     });
     return () => {
       active = false;
@@ -161,8 +173,8 @@ export function StorePage({ storeId, onBack }: Props) {
   const selectProduct = useCallback(
     (next: Product) => {
       setProduct(next);
-      setSearchOpen(false);
-      setListOpen(false);
+      setTab('kart');
+      setBrowseDepartment(null);
       setSnap('half');
       clearRoute();
     },
@@ -172,14 +184,19 @@ export function StorePage({ storeId, onBack }: Props) {
   const startPicking = useCallback((intent: Exclude<PickIntent, null>) => {
     setRouteError(null);
     setPickIntent(intent);
-    setListOpen(false);
+    setTab('kart');
     // Arket trekkes ned, så man ser butikken mens man peker ut hvor man står.
     setSnap('peek');
   }, []);
 
   const handlePick = useCallback(
     (point: Vec2) => {
-      if (!grid) return;
+      if (!grid || !plan) return;
+
+      if (!pointInPolygon(plan.outline, point)) {
+        setRouteError('Trykk inne i butikken.');
+        return;
+      }
 
       if (pickIntent === 'tour') {
         const stops = list.items
@@ -217,7 +234,7 @@ export function StorePage({ storeId, onBack }: Props) {
       setRouteError(null);
       setSnap('half');
     },
-    [grid, pickIntent, fixture, list.items, listProducts, fixtureById],
+    [grid, plan, pickIntent, fixture, list.items, listProducts, fixtureById],
   );
 
   /** Huker av en vare underveis og legger resten av ruten fra det punktet. */
@@ -247,19 +264,18 @@ export function StorePage({ storeId, onBack }: Props) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
-      if (searchOpen) setSearchOpen(false);
-      else if (listOpen) setListOpen(false);
+      if (tab !== 'kart') setTab('kart');
       else if (pickIntent) setPickIntent(null);
       else if (route || tour) clearRoute();
       else if (product) setProduct(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [searchOpen, listOpen, pickIntent, route, tour, product, clearRoute]);
+  }, [tab, pickIntent, route, tour, product, clearRoute]);
 
   const departmentName = (id: string) => plan?.departments.find((d) => d.id === id)?.name ?? id;
 
-  const sheetOpen = Boolean(product || tour);
+  const sheetOpen = Boolean(product || tour) && tab === 'kart';
   const insets: MapInsets = useMemo(
     () => ({
       top: SEARCHBAR_INSET,
@@ -277,15 +293,14 @@ export function StorePage({ storeId, onBack }: Props) {
     return (
       <div className="store">
         <header className="store__header">
-          <button className="icon-btn" onClick={onBack} aria-label="Tilbake" type="button">
-            <BackIcon />
-          </button>
           <div className="store__title">
             <span className="skeleton skeleton--line" style={{ width: 130 }} />
             <span className="skeleton skeleton--line skeleton--short" />
           </div>
         </header>
-        <div className="map map--loading" />
+        <div className="store__stage">
+          <div className="map map--loading" />
+        </div>
       </div>
     );
   }
@@ -295,8 +310,8 @@ export function StorePage({ storeId, onBack }: Props) {
       <div className="store">
         <div className="loading">
           Fant ingen plantegning for denne butikken.
-          <button className="btn btn--ghost btn--sm" onClick={onBack} type="button">
-            Tilbake
+          <button className="btn btn--ghost btn--sm" onClick={onSwitchStore} type="button">
+            Velg en annen butikk
           </button>
         </div>
       </div>
@@ -314,9 +329,14 @@ export function StorePage({ storeId, onBack }: Props) {
   };
 
   return (
-    <div className="store" ref={stageRef} style={accentStyle}>
+    <div className="store" style={accentStyle}>
       <header className="store__header">
-        <button className="icon-btn" onClick={onBack} aria-label="Tilbake til butikksøk" type="button">
+        <button
+          className="icon-btn"
+          onClick={onSwitchStore}
+          aria-label="Bytt butikk"
+          type="button"
+        >
           <BackIcon />
         </button>
         <div className="store__title">
@@ -325,131 +345,158 @@ export function StorePage({ storeId, onBack }: Props) {
             {store.address}, {store.city} · {store.openingHours}
           </p>
         </div>
-        <div className="view-toggle" role="group" aria-label="Visning">
-          <button data-active={view === '2d'} onClick={() => setView('2d')} type="button">
-            Plan
-          </button>
-          <button data-active={view === '3d'} onClick={() => setView('3d')} type="button">
-            <CubeIcon size={13} />
-            3D
-          </button>
-        </div>
       </header>
 
-      <div className="searchbar" data-filled={Boolean(product)}>
-        <button
-          className="searchbar__open"
-          onClick={() => setSearchOpen(true)}
-          type="button"
-          aria-label="Søk etter vare"
-        >
-          <SearchIcon />
-          <span>{product ? product.name : 'Søk etter vare'}</span>
-        </button>
-        <button
-          className="searchbar__list"
-          onClick={() => setListOpen(true)}
-          type="button"
-          aria-label={`Handleliste, ${list.items.length} varer`}
-        >
-          <ListIcon />
-          {list.items.length > 0 && <span className="badge">{list.items.length}</span>}
-        </button>
-      </div>
-
-      <Suspense fallback={<div className="map map--loading" />}>
-        {view === '2d' ? <Map2D {...mapProps} /> : <Map3D {...mapProps} />}
-      </Suspense>
-
-      {(pickIntent || routeError) && (
-        <div
-          className={`hint${routeError ? ' hint--error' : ''}`}
-          style={{ bottom: 16 + insets.bottom }}
-          role="status"
-        >
-          <span className="hint__pulse" aria-hidden="true" />
-          <span>
-            {routeError ??
-              (pickIntent === 'tour'
-                ? 'Trykk der du starter handleturen'
-                : 'Trykk på kartet der du står')}
-          </span>
+      <div className="store__stage" ref={stageRef}>
+        <div className="topbar">
           <button
-            onClick={() => {
-              setPickIntent(null);
-              setRouteError(null);
-            }}
+            className="searchbar"
+            data-filled={Boolean(product)}
+            onClick={() => setTab('sok')}
             type="button"
           >
-            Avbryt
+            <SearchIcon />
+            <span>{product ? product.name : 'Søk etter vare'}</span>
           </button>
+
+          <div className="viewswitch" role="group" aria-label="Visning">
+            <button
+              data-active={view === '2d'}
+              onClick={() => setView('2d')}
+              type="button"
+              aria-pressed={view === '2d'}
+            >
+              <PlanIcon size={15} />
+              Plan
+            </button>
+            <button
+              data-active={view === '3d'}
+              onClick={() => setView('3d')}
+              type="button"
+              aria-pressed={view === '3d'}
+            >
+              <CubeIcon size={15} />
+              3D
+            </button>
+          </div>
         </div>
-      )}
 
-      {tour && (
-        <TourSheet
-          tour={tour}
-          plan={plan}
-          meters={tourMeters}
-          doneIds={doneIds}
-          snap={snap}
-          onSnapChange={setSnap}
-          onToggle={tickOff}
-          onSelect={selectProduct}
-          onEnd={clearRoute}
-        />
-      )}
+        <Suspense fallback={<div className="map map--loading" />}>
+          {view === '2d' ? <Map2D {...mapProps} /> : <Map3D {...mapProps} />}
+        </Suspense>
 
-      {!tour && product && fixture && (
-        <ProductSheet
-          product={product}
-          fixture={fixture}
-          departmentName={departmentName(product.departmentId)}
-          routeMeters={routeMeters}
-          steps={steps}
-          arrived={arrived}
-          inList={list.has(product.id)}
-          picking={pickIntent !== null}
-          snap={snap}
-          onSnapChange={setSnap}
-          onShowRoute={() => startPicking('single')}
-          onClearRoute={clearRoute}
-          onArrived={() => {
-            setArrived(true);
-            setSnap('half');
-          }}
-          onToggleList={() => (list.has(product.id) ? list.remove(product.id) : list.add(product.id))}
-          onClose={() => {
-            setProduct(null);
-            clearRoute();
-          }}
-        />
-      )}
+        {(pickIntent || routeError) && (
+          <div
+            className={`hint${routeError ? ' hint--error' : ''}`}
+            style={{ bottom: 16 + insets.bottom }}
+            role="status"
+          >
+            <span className="hint__pulse" aria-hidden="true" />
+            <span>
+              {routeError ??
+                (pickIntent === 'tour'
+                  ? 'Trykk der du starter handleturen'
+                  : 'Trykk på kartet der du står')}
+            </span>
+            <button
+              onClick={() => {
+                setPickIntent(null);
+                setRouteError(null);
+              }}
+              type="button"
+            >
+              Avbryt
+            </button>
+          </div>
+        )}
 
-      {searchOpen && (
-        <SearchOverlay
-          storeId={storeId}
-          plan={plan}
-          inList={list.has}
-          onAdd={list.add}
-          onSelect={selectProduct}
-          onClose={() => setSearchOpen(false)}
-        />
-      )}
+        {tab === 'kart' && tour && (
+          <TourSheet
+            tour={tour}
+            plan={plan}
+            meters={tourMeters}
+            doneIds={doneIds}
+            snap={snap}
+            onSnapChange={setSnap}
+            onToggle={tickOff}
+            onSelect={selectProduct}
+            onEnd={clearRoute}
+          />
+        )}
 
-      {listOpen && (
-        <ShoppingListOverlay
-          items={list.items}
-          products={listProducts}
-          plan={plan}
-          onToggle={list.toggle}
-          onRemove={list.remove}
-          onSelect={selectProduct}
-          onRoute={() => startPicking('tour')}
-          onClear={list.clear}
-          onClose={() => setListOpen(false)}
-        />
-      )}
+        {tab === 'kart' && !tour && product && fixture && (
+          <ProductSheet
+            product={product}
+            fixture={fixture}
+            departmentName={departmentName(product.departmentId)}
+            routeMeters={routeMeters}
+            steps={steps}
+            arrived={arrived}
+            inList={list.has(product.id)}
+            picking={pickIntent !== null}
+            snap={snap}
+            onSnapChange={setSnap}
+            onShowRoute={() => startPicking('single')}
+            onClearRoute={clearRoute}
+            onArrived={() => {
+              setArrived(true);
+              setSnap('half');
+            }}
+            onToggleList={() =>
+              list.has(product.id) ? list.remove(product.id) : list.add(product.id)
+            }
+            onClose={() => {
+              setProduct(null);
+              clearRoute();
+            }}
+          />
+        )}
+
+        {tab === 'sok' && (
+          <SearchOverlay
+            storeId={storeId}
+            plan={plan}
+            initialDepartmentId={browseDepartment}
+            inList={list.has}
+            onAdd={list.add}
+            onSelect={selectProduct}
+            onClose={() => {
+              setTab('kart');
+              setBrowseDepartment(null);
+            }}
+          />
+        )}
+
+        {tab === 'liste' && (
+          <ShoppingListOverlay
+            items={list.items}
+            products={listProducts}
+            plan={plan}
+            onToggle={list.toggle}
+            onRemove={list.remove}
+            onSelect={selectProduct}
+            onRoute={() => startPicking('tour')}
+            onClear={list.clear}
+            onClose={() => setTab('kart')}
+          />
+        )}
+
+        {tab === 'butikk' && (
+          <StoreInfo
+            store={store}
+            chain={chain}
+            plan={plan}
+            productCount={productCount}
+            onSwitchStore={onSwitchStore}
+            onPickDepartment={(departmentId) => {
+              setBrowseDepartment(departmentId);
+              setTab('sok');
+            }}
+          />
+        )}
+      </div>
+
+      <TabBar active={tab} listCount={list.items.length} onSelect={setTab} />
     </div>
   );
 }

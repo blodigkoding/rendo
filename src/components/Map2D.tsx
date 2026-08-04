@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Fixture, StorePlan, Vec2 } from '../data/types';
 import { FACING_VECTOR, rectCenter } from '../lib/geometry';
+import { toPathData } from '../lib/polygon';
 import { MinusIcon, PlusIcon } from './icons';
 
 /** En vare kartet skal peke ut. Handlelista gir flere om gangen. */
@@ -48,11 +49,10 @@ const MAX_K = 90;
 function useAnnotations(plan: StorePlan) {
   return useMemo(() => {
     const aisles = new Map<string, Vec2[]>();
-    // Avdelingsnavnet plasseres i gangen foran hyllene, ikke oppå dem – ellers
-    // kolliderer navnene på de to sidene av samme gondolrad. Én etikett per
-    // avdeling per gang, slik at avdelinger som går over flere ganger merkes
-    // der de faktisk står.
+    // Avdelingsnavnet står oppå selve reolen, én etikett per avdeling per gang,
+    // slik at avdelinger som går over flere ganger merkes der de faktisk står.
     const departments = new Map<string, Vec2[]>();
+    const facings = new Map<string, Fixture['facing']>();
 
     for (const fixture of plan.fixtures) {
       const n = FACING_VECTOR[fixture.facing];
@@ -60,10 +60,8 @@ function useAnnotations(plan: StorePlan) {
       const access = { x: c.x + n.x * (fixture.w / 2 + 1), y: c.y + n.y * (fixture.d / 2 + 1) };
       aisles.set(fixture.aisle, [...(aisles.get(fixture.aisle) ?? []), access]);
       const key = `${fixture.departmentId}|${fixture.aisle}`;
-      departments.set(key, [
-        ...(departments.get(key) ?? []),
-        { x: c.x + n.x * (fixture.w / 2 + 0.85), y: c.y + n.y * (fixture.d / 2 + 0.85) },
-      ]);
+      departments.set(key, [...(departments.get(key) ?? []), c]);
+      facings.set(key, fixture.facing);
     }
 
     const spread = (points: Vec2[]) => {
@@ -94,12 +92,16 @@ function useAnnotations(plan: StorePlan) {
       const s = spread(points);
       const vertical = s.maxY - s.minY > s.maxX - s.minX;
       const id = key.split('|')[0];
+      // De to sidene av samme gondolrad forskyves langs raden, ellers legger
+      // navnene seg oppå hverandre.
+      const facing = facings.get(key);
+      const near = facing === 'west' || facing === 'north' ? 0.25 : 0.75;
       return {
         key,
         id,
         name: plan.departments.find((d) => d.id === id)?.name ?? id,
-        x: s.cx,
-        y: s.cy,
+        x: vertical ? s.cx : s.minX + (s.maxX - s.minX) * near,
+        y: vertical ? s.minY + (s.maxY - s.minY) * near : s.cy,
         vertical,
       };
     });
@@ -452,7 +454,24 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
   };
 
   const routePath = route && route.length > 1 ? route.map((p, i) => `${i ? 'L' : 'M'}${p.x} ${p.y}`).join(' ') : null;
+  const outlinePath = toPathData(plan.outline);
   const scaleMeters = 40 / transform.k;
+
+  /**
+   * Skriften i planen måles i meter, så uten dette vokser den med zoomen. Her
+   * holdes den på samme skjermstørrelse, men aldri større enn reolen den står
+   * på – og zoomer man helt ut, forsvinner den i stedet for å bli grøt.
+   */
+  const textSize = (px: number, maxMeters: number) => Math.min(maxMeters, px / transform.k);
+  const deptFont = textSize(13, 0.95);
+  const showDeptLabels = deptFont * transform.k >= 7.5;
+  const aisleFont = textSize(12, 0.85);
+  const showAisleLabels = aisleFont * transform.k >= 7;
+  const smallFont = textSize(10.5, 0.7);
+  const deptText = {
+    fontSize: deptFont,
+    strokeWidth: Math.min(0.26, textSize(3.4, 0.26)),
+  };
 
   return (
     <div
@@ -465,11 +484,17 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
       onWheel={onWheel}
     >
       <svg ref={svgRef} className="map__canvas" role="img" aria-label={`Plantegning for butikken`}>
+        <defs>
+          <clipPath id="plan-floor" clipPathUnits="userSpaceOnUse">
+            <path d={outlinePath} />
+          </clipPath>
+        </defs>
+
         <g transform={`translate(${transform.x} ${transform.y}) scale(${transform.k})`}>
-          <rect className="plan__floor" x={0} y={0} width={plan.width} height={plan.depth} />
+          <path className="plan__floor" d={outlinePath} />
 
           {/* rutenett, 2 m */}
-          <g className="plan__grid">
+          <g className="plan__grid" clipPath="url(#plan-floor)">
             {Array.from({ length: Math.floor(plan.width / 2) }, (_, i) => (
               <line key={`v${i}`} x1={(i + 1) * 2} y1={0} x2={(i + 1) * 2} y2={plan.depth} />
             ))}
@@ -535,24 +560,27 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
             );
           })}
 
-          {/* avdelingsnavn */}
-          {deptLabels.map((label) => (
+          {/* avdelingsnavn – står oppå reolen de gjelder */}
+          {showDeptLabels &&
+            deptLabels.map((label) => (
             <text
               key={label.key}
-              className="plan__label"
+              className={`plan__dept${targetFixtures.size && targetDepartments.has(label.id) ? ' plan__dept--active' : ''}`}
               x={label.x}
               y={label.y}
               textAnchor="middle"
               dominantBaseline="middle"
               transform={label.vertical ? `rotate(-90 ${label.x} ${label.y})` : undefined}
-              opacity={hasTargets && !targetDepartments.has(label.id) ? 0.3 : 1}
-            >
-              {label.name}
-            </text>
-          ))}
+              opacity={hasTargets && !targetDepartments.has(label.id) ? 0.35 : 1}
+              style={deptText}
+              >
+                {label.name}
+              </text>
+            ))}
 
           {/* gangnummer */}
-          {aisleLabels.map((label) => (
+          {showAisleLabels &&
+            aisleLabels.map((label) => (
             <text
               key={label.name}
               className="plan__label plan__label--aisle"
@@ -560,27 +588,25 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
               y={label.y}
               textAnchor="middle"
               dominantBaseline="middle"
-            >
-              {label.name}
-            </text>
-          ))}
+                style={{ fontSize: aisleFont }}
+              >
+                {label.name}
+              </text>
+            ))}
 
           {/* inngang og servicepunkter */}
           {plan.entrances.map((entrance) => (
             <g key={entrance.id}>
-              <line
-                x1={entrance.position.x - 1.6}
-                y1={plan.depth}
-                x2={entrance.position.x + 1.6}
-                y2={plan.depth}
-                stroke="#fff"
-                strokeWidth={0.16}
+              <path
+                className="plan__door"
+                d={`M${entrance.position.x - 1.5} ${entrance.position.y + 0.9} L${entrance.position.x + 1.5} ${entrance.position.y + 0.9} M${entrance.position.x} ${entrance.position.y + 0.7} L${entrance.position.x} ${entrance.position.y - 0.5} M${entrance.position.x - 0.5} ${entrance.position.y - 0.05} L${entrance.position.x} ${entrance.position.y - 0.55} L${entrance.position.x + 0.5} ${entrance.position.y - 0.05}`}
               />
               <text
                 className="plan__label"
                 x={entrance.position.x}
-                y={entrance.position.y + 0.5}
+                y={entrance.position.y - 1.15}
                 textAnchor="middle"
+                style={{ fontSize: smallFont }}
               >
                 {entrance.name}
               </text>
@@ -594,6 +620,7 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
               y={landmark.position.y}
               textAnchor="middle"
               dominantBaseline="middle"
+              style={{ fontSize: smallFont }}
             >
               {landmark.name}
             </text>

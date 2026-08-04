@@ -108,6 +108,28 @@ export const PlusCircleIcon = ({ size = 16 }: IconProps) => (
   </svg>
 );
 
+export const MapIcon = ({ size = 20 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <path d="M9 4.5L3.5 6.8v12.7L9 17.2l6 2.3 5.5-2.3V4.5L15 6.8 9 4.5z" />
+    <path d="M9 4.5v12.7M15 6.8v12.7" />
+  </svg>
+);
+
+export const StoreIcon = ({ size = 20 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <path d="M4 10v9.5h16V10" />
+    <path d="M3 9.6l1.7-5.1h14.6L21 9.6a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z" />
+    <path d="M10 19.5V14h4v5.5" />
+  </svg>
+);
+
+export const PlanIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <rect x="3.5" y="3.5" width="17" height="17" rx="1.4" />
+    <path d="M8.5 3.5v10M14 20.5v-10M3.5 13.5h5M14 10.5h6.5" />
+  </svg>
+);
+
 export const CubeIcon = ({ size = 16 }: IconProps) => (
   <svg {...base(size)} aria-hidden="true">
     <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" />

@@ -47,11 +47,48 @@ function StatusBar() {
   );
 }
 
+/**
+ * Slår av nettleserens egen knipezoom. Uten dette zoomer Safari hele siden –
+ * inkludert den sorte bakgrunnen – i stedet for at kartet zoomer.
+ */
+function useNoBrowserZoom() {
+  useEffect(() => {
+    const stop = (event: Event) => event.preventDefault();
+
+    // Safari på iOS/macOS: egne gesture-hendelser for knip.
+    document.addEventListener('gesturestart', stop, { passive: false });
+    document.addEventListener('gesturechange', stop, { passive: false });
+    document.addEventListener('gestureend', stop, { passive: false });
+
+    // Flerfingerberøring skal aldri gi sidezoom.
+    const onTouchMove = (event: TouchEvent) => {
+      if (event.touches.length > 1) event.preventDefault();
+    };
+    document.addEventListener('touchmove', onTouchMove, { passive: false });
+
+    // Ctrl/⌘ + hjul er nettleserzoom på desktop.
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) event.preventDefault();
+    };
+    document.addEventListener('wheel', onWheel, { passive: false });
+
+    return () => {
+      document.removeEventListener('gesturestart', stop);
+      document.removeEventListener('gesturechange', stop);
+      document.removeEventListener('gestureend', stop);
+      document.removeEventListener('touchmove', onTouchMove);
+      document.removeEventListener('wheel', onWheel);
+    };
+  }, []);
+}
+
 export function DeviceFrame({ children }: { children: ReactNode }) {
   const [bare, setBare] = useState(
     () => typeof window !== 'undefined' && window.innerWidth <= BARE_BREAKPOINT,
   );
   const [scale, setScale] = useState(1);
+
+  useNoBrowserZoom();
 
   useEffect(() => {
     const update = () => {

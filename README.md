@@ -45,10 +45,21 @@ src/
     DeviceFrame.tsx  iPhone-rammen med statuslinje og home indicator
     HomePage.tsx     Butikkvalg
     StorePage.tsx    Butikkside: søk, kart, ark, ruteflyt
+    TabBar.tsx       Fanelinja: Kart, Søk, Liste, Butikk
     Map2D.tsx        Plantegning i SVG – pinch, treghet, dobbelttrykk
-    Map3D.tsx        3D-modell (three.js), lastes først ved behov
+    Map3D.tsx        3D-modell (three.js), standardvisningen
     BottomSheet.tsx  Draggbart bunnark med tre høyder
 ```
+
+### Butikkformer
+
+Ekte butikklokaler er ikke rektangler. Hver plan får derfor en yttervegg med
+avskårne hjørner og innhugg – se [src/data/mock/outline.ts](src/data/mock/outline.ts).
+Formen genereres med en fast generator per butikk, og hvert innhugg prøves mot
+alt som allerede står i lokalet, så ingen reol eller kasse havner utenfor veggen.
+Polygonet brukes hele veien: ruting sjekker at man er innenfor og langt nok fra
+veggen, planen tegner det som gulvflate, og 3D-modellen reiser vegger langs hver
+kant.
 
 ### Data
 

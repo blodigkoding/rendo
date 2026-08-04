@@ -1,4 +1,5 @@
-import type { Checkout, Department, Fixture, FixtureType, StorePlan } from '../types';
+import type { Checkout, Department, Fixture, FixtureType, Rect, StorePlan } from '../types';
+import { buildOutline } from './outline';
 
 /**
  * Butikkplanene bygges av de samme byggeklossene en BIM-modell ville gitt oss:
@@ -176,21 +177,33 @@ export function buildPlan(spec: PlanSpec): StorePlan {
     d: 1.2,
   }));
 
+  const entrance = { x: spec.entranceX, y: spec.depth - 1.4 };
+
+  // Veggen legges rundt alt som allerede står i butikken, pluss litt luft foran
+  // inngangen og kassene.
+  const keepInside: Rect[] = [
+    ...fixtures.map((f) => ({ x: f.x, y: f.y, w: f.w, d: f.d })),
+    ...checkouts.map((c) => ({ x: c.x - 1, y: c.y - 1, w: c.w + 2, d: c.d + 2 })),
+    { x: entrance.x - 2.4, y: entrance.y - 1.6, w: 4.8, d: 2.6 },
+  ];
+
+  const outline = buildOutline({
+    seed: spec.storeId,
+    width: spec.width,
+    depth: spec.depth,
+    keepInside,
+  });
+
   return {
     storeId: spec.storeId,
+    outline,
     width: spec.width,
     depth: spec.depth,
     wallHeightCm: 320,
     departments: spec.departments,
     fixtures,
     checkouts,
-    entrances: [
-      {
-        id: 'en-1',
-        name: 'Inngang',
-        position: { x: spec.entranceX, y: spec.depth - 1.4 },
-      },
-    ],
+    entrances: [{ id: 'en-1', name: 'Inngang', position: entrance }],
     landmarks: [
       { id: 'lm-kasser', name: 'Kasser', position: { x: 7 + spec.checkouts * 1.5, y: checkoutY + 2.4 } },
       { id: 'lm-service', name: 'Kundeservice', position: { x: spec.width - 4, y: checkoutY + 1.6 } },

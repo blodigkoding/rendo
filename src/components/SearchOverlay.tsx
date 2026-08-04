@@ -13,24 +13,37 @@ import { BackIcon, CheckIcon, PlusCircleIcon, SearchIcon } from './icons';
 interface Props {
   storeId: string;
   plan: StorePlan;
+  /** Åpne rett i en avdeling, f.eks. fra butikkfanen. */
+  initialDepartmentId?: string | null;
   inList: (productId: string) => boolean;
   onAdd: (productId: string) => void;
   onSelect: (product: Product) => void;
   onClose: () => void;
 }
 
-export function SearchOverlay({ storeId, plan, inList, onAdd, onSelect, onClose }: Props) {
+export function SearchOverlay({
+  storeId,
+  plan,
+  initialDepartmentId,
+  inList,
+  onAdd,
+  onSelect,
+  onClose,
+}: Props) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Product[]>([]);
   const [searching, setSearching] = useState(false);
-  const [department, setDepartment] = useState<Department | null>(null);
+  const [department, setDepartment] = useState<Department | null>(
+    () => plan.departments.find((d) => d.id === initialDepartmentId) ?? null,
+  );
   const [browse, setBrowse] = useState<Product[]>([]);
   const [recents, setRecents] = useState<string[]>(() => readRecents());
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    // Kommer man rett inn i en avdeling, skal ikke tastaturet sprette opp.
+    if (!initialDepartmentId) inputRef.current?.focus();
+  }, [initialDepartmentId]);
 
   useEffect(() => {
     let active = true;

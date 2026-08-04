@@ -145,7 +145,12 @@ export interface Checkout extends Rect {
 
 export interface StorePlan {
   storeId: string;
-  /** Ytre mål på salgsflaten. */
+  /**
+   * Ytterveggen som en lukket polygon. Butikker er sjelden rektangulære – de
+   * har avskårne hjørner, innhugg for tekniske rom og fremspring mot inngangen.
+   */
+  outline: Vec2[];
+  /** Omsluttende mål, brukt til innramming av kartet. */
   width: number;
   depth: number;
   /** Vegghøyde, brukt i 3D. */

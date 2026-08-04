@@ -1,4 +1,5 @@
 import type { Rect, StorePlan, Vec2 } from '../data/types';
+import { distanceToEdge, pointInPolygon } from './polygon';
 
 /**
  * Ruting gjennom butikken.
@@ -41,11 +42,11 @@ export function buildNavGrid(plan: StorePlan): NavGrid {
 
   for (let j = 0; j < rows; j++) {
     for (let i = 0; i < cols; i++) {
-      const x = (i + 0.5) * CELL;
-      const y = (j + 0.5) * CELL;
+      const point = { x: (i + 0.5) * CELL, y: (j + 0.5) * CELL };
+      // Utenfor veggen, for nær veggen, eller inni innredningen.
       const outside =
-        x < WALL_MARGIN || y < WALL_MARGIN || x > plan.width - WALL_MARGIN || y > plan.depth - WALL_MARGIN;
-      const hit = outside || obstacles.some((r) => inRect(r, x, y));
+        !pointInPolygon(plan.outline, point) || distanceToEdge(plan.outline, point) < WALL_MARGIN;
+      const hit = outside || obstacles.some((r) => inRect(r, point.x, point.y));
       if (hit) blocked[j * cols + i] = 1;
     }
   }
