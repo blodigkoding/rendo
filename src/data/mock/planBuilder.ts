@@ -1,4 +1,4 @@
-import type { Checkout, Department, Fixture, FixtureType, Rect, StorePlan } from '../types';
+import type { Checkout, Department, Fixture, FixtureType, Rect, Room, StorePlan } from '../types';
 import { buildOutline } from './outline';
 
 /**
@@ -170,7 +170,7 @@ export function buildPlan(spec: PlanSpec): StorePlan {
   }
 
   const checkoutY = spec.depth - 4;
-  const checkouts: Checkout[] = Array.from({ length: spec.checkouts }, (_, i) => ({
+  let checkouts: Checkout[] = Array.from({ length: spec.checkouts }, (_, i) => ({
     id: `co-${i + 1}`,
     name: `Kasse ${i + 1}`,
     kind: 'checkout' as const,
@@ -180,17 +180,35 @@ export function buildPlan(spec: PlanSpec): StorePlan {
     d: 1.2,
   }));
 
-  // Vareutlevering står for seg selv, til side for kassene.
+  /**
+   * Vareutleveringen er et lager med en luke, ikke en disk. Rommet legges i
+   * hjørnet bak kassene, og alt som ellers ville stått der, flyttes ut.
+   */
+  const rooms: Room[] = [];
   if (spec.pickup) {
-    checkouts.push({
-      id: 'co-pickup',
+    const w = Math.min(11, spec.width * 0.3);
+    const d = Math.min(8, spec.depth * 0.3);
+    const room: Room = {
+      id: 'room-pickup',
       name: 'Vareutlevering',
-      kind: 'pickup',
-      x: spec.width - 9,
-      y: checkoutY - 0.4,
-      w: 4.2,
-      d: 1.6,
-    });
+      kind: 'storage',
+      heightCm: 300,
+      x: spec.width - w - 0.6,
+      y: spec.depth - d - 0.6,
+      w,
+      d,
+      opening: { side: 'west', at: d * 0.32, width: 2.6 },
+    };
+    rooms.push(room);
+
+    const clash = (r: Rect) =>
+      r.x < room.x + room.w + 0.5 &&
+      r.x + r.w > room.x - 0.5 &&
+      r.y < room.y + room.d + 0.5 &&
+      r.y + r.d > room.y - 0.5;
+
+    for (let i = fixtures.length - 1; i >= 0; i--) if (clash(fixtures[i])) fixtures.splice(i, 1);
+    checkouts = checkouts.filter((c) => !clash(c));
   }
 
   const entrance = { x: spec.entranceX, y: spec.depth - 1.4 };
@@ -200,6 +218,7 @@ export function buildPlan(spec: PlanSpec): StorePlan {
   const keepInside: Rect[] = [
     ...fixtures.map((f) => ({ x: f.x, y: f.y, w: f.w, d: f.d })),
     ...checkouts.map((c) => ({ x: c.x - 1, y: c.y - 1, w: c.w + 2, d: c.d + 2 })),
+    ...rooms.map((r) => ({ x: r.x - 0.4, y: r.y - 0.4, w: r.w + 0.8, d: r.d + 0.8 })),
     { x: entrance.x - 2.4, y: entrance.y - 1.6, w: 4.8, d: 2.6 },
   ];
 
@@ -219,10 +238,19 @@ export function buildPlan(spec: PlanSpec): StorePlan {
     departments: spec.departments,
     fixtures,
     checkouts,
+    rooms,
     entrances: [{ id: 'en-1', name: 'Inngang', position: entrance }],
     landmarks: [
       { id: 'lm-kasser', name: 'Kasser', position: { x: 7 + spec.checkouts * 1.5, y: checkoutY + 2.4 } },
-      { id: 'lm-service', name: 'Kundeservice', position: { x: spec.width - 4, y: checkoutY + 1.6 } },
+      ...(spec.pickup
+        ? []
+        : [
+            {
+              id: 'lm-service',
+              name: 'Kundeservice',
+              position: { x: spec.width - 4, y: checkoutY + 1.6 },
+            },
+          ]),
       ...(spec.landmarks ?? []).map((l) => ({ id: l.id, name: l.name, position: { x: l.x, y: l.y } })),
     ],
   };

@@ -38,6 +38,8 @@ export function buildNavGrid(plan: StorePlan): NavGrid {
   const obstacles: Rect[] = [
     ...plan.fixtures.map((f) => inflate(f, CLEARANCE)),
     ...plan.checkouts.map((c) => inflate(c, CLEARANCE)),
+    // Lukkede rom er ikke kundeareal – man stopper ved luken.
+    ...plan.rooms.map((r) => inflate(r, CLEARANCE)),
   ];
 
   for (let j = 0; j < rows; j++) {

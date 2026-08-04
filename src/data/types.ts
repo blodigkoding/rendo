@@ -140,13 +140,34 @@ export interface Landmark {
   position: Vec2;
 }
 
-/** Disker foran i butikken: kasser, kundeservice og vareutlevering. */
-export type CounterKind = 'checkout' | 'pickup' | 'service';
+/** Disker foran i butikken. */
+export type CounterKind = 'checkout' | 'service';
 
 export interface Checkout extends Rect {
   id: string;
   name: string;
   kind: CounterKind;
+}
+
+/** Åpningen i veggen inn til et rom – luken man henter varene i. */
+export interface RoomOpening {
+  side: Facing;
+  /** Avstand fra rommets hjørne langs veggen. */
+  at: number;
+  width: number;
+}
+
+/**
+ * Et lukket rom i butikken, som lageret bak vareutleveringen. Rommet er tildekket
+ * – skal man ikke inn dit, er det ingen grunn til å se det – og har én åpning
+ * mot salgsflaten.
+ */
+export interface Room extends Rect {
+  id: string;
+  name: string;
+  kind: 'storage';
+  heightCm: number;
+  opening: RoomOpening;
 }
 
 export interface StorePlan {
@@ -164,6 +185,8 @@ export interface StorePlan {
   departments: Department[];
   fixtures: Fixture[];
   checkouts: Checkout[];
+  /** Lukkede rom: lager, vareutlevering, tekniske rom. */
+  rooms: Room[];
   entrances: Entrance[];
   landmarks: Landmark[];
 }

@@ -56,6 +56,17 @@ export function StoreIsoArt({ plan, className }: { plan: StorePlan; className?: 
         side: C.shelf,
         front: '#dcd8d0',
       })),
+      // Lukkede rom har tak – de vises som en lukket boks.
+      ...plan.rooms.map((r) => ({
+        x: r.x,
+        z: r.y,
+        w: r.w,
+        d: r.d,
+        h: r.heightCm / 100,
+        top: C.shelf,
+        side: C.floorEdge,
+        front: '#d5d1c8',
+      })),
     ];
 
     // Bakerst først: lavere (x + z) ligger lengst unna.

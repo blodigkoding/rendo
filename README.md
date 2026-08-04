@@ -9,7 +9,7 @@ flere varer, legger appen én rute innom alle sammen.
 Demoen har seks butikker: **REMA 1000 Ås**, **Coop Extra Ås**, **Europris Ås**,
 **JYSK Vinterbro**, **Clas Ohlson Ski** og **Biltema Vestby** – hver med sin egen
 plan, sitt eget vareutvalg og sin egen farge i toppen. JYSK og Biltema har
-vareutlevering, som står som egen disk i kartet.
+vareutlevering – et lager med luke, tegnet som et tildekket rom i kartet.
 
 ## Kom i gang
 
@@ -83,11 +83,13 @@ til typene i `types.ts` som må skrives. Byttet gjøres på én linje i
 
 ### Produktbilder
 
-Vi har ingen bildekilde ennå. Legg filer i
-[src/assets/produkter/](src/assets/produkter/) med EAN eller varenavn som
-filnavn, så kobles de på automatisk. Varer uten bilde tegnes som
-strekillustrasjon av emballasjen – flaske, kartong, boks, pose, brett og elleve
-andre former, valgt ut fra varenavn og avdeling.
+Vi har ingen fotokilde ennå, så bildene tegnes: emballasjen varen faktisk kommer
+i – flaske, kartong, boks, pose, brett, verktøy, tekstil, møbel og ti former til
+– med etikett og lokk i en farge som følger avdelingen. Formen velges ut fra
+varenavn og avdeling.
+
+Legg ekte foto i [src/assets/produkter/](src/assets/produkter/) med EAN eller
+varenavn som filnavn, så brukes de i stedet.
 
 ### Ruting
 

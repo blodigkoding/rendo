@@ -110,8 +110,7 @@ function Fixtures({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) 
  * kjenner den igjen ovenfra. Vareutleveringen er en bredere disk med luke bak.
  */
 function Counter({ counter }: { counter: Checkout }) {
-  const isPickup = counter.kind === 'pickup';
-  const height = isPickup ? 1.05 : 0.9;
+  const height = 0.9;
   const along = Math.max(counter.w, counter.d);
   const across = Math.min(counter.w, counter.d);
   const lengthwise = counter.w >= counter.d;
@@ -139,42 +138,23 @@ function Counter({ counter }: { counter: Checkout }) {
         <meshStandardMaterial color={C.wood} roughness={0.75} />
       </mesh>
 
-      {isPickup ? (
-        <>
-          {/* luke bak disken */}
-          <mesh
-            position={along3(0, -across * 0.9)}
-            castShadow
-            receiveShadow
-          >
-            <boxGeometry args={size3(along * 0.9, 0.18, 2.1)} />
-            <meshStandardMaterial color={C.floorEdge} roughness={1} />
-          </mesh>
-          <mesh position={[0, 1.4, 0]}>
-            <boxGeometry args={size3(along * 0.5, 0.05, 0.06)} />
-            <meshBasicMaterial color={C.sage} />
-          </mesh>
-        </>
-      ) : (
-        <>
-          {/* samlebånd */}
-          <mesh position={[belt[0], height + 0.08, belt[2]]}>
-            <boxGeometry args={size3(along * 0.6, 0.03, across * 0.5)} />
-            <meshStandardMaterial color={C.ink} roughness={0.6} />
-          </mesh>
-          {/* terminal med skjerm */}
-          <group position={terminal}>
-            <mesh position={[0, height + 0.22, 0]} castShadow>
-              <boxGeometry args={size3(0.36, 0.36, 0.34)} />
-              <meshStandardMaterial color={C.floorEdge} roughness={0.9} />
-            </mesh>
-            <mesh position={[0, height + 0.46, 0]} castShadow>
-              <boxGeometry args={size3(0.3, 0.22, 0.05)} />
-              <meshStandardMaterial color={C.ink} roughness={0.5} />
-            </mesh>
-          </group>
-        </>
-      )}
+      {/* samlebånd */}
+      <mesh position={[belt[0], height + 0.08, belt[2]]}>
+        <boxGeometry args={size3(along * 0.6, 0.03, across * 0.5)} />
+        <meshStandardMaterial color={C.ink} roughness={0.6} />
+      </mesh>
+
+      {/* terminal med skjerm */}
+      <group position={terminal}>
+        <mesh position={[0, height + 0.22, 0]} castShadow>
+          <boxGeometry args={size3(0.36, 0.36, 0.34)} />
+          <meshStandardMaterial color={C.floorEdge} roughness={0.9} />
+        </mesh>
+        <mesh position={[0, height + 0.46, 0]} castShadow>
+          <boxGeometry args={size3(0.3, 0.22, 0.05)} />
+          <meshStandardMaterial color={C.ink} roughness={0.5} />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -185,6 +165,112 @@ function Checkouts({ plan }: { plan: StorePlan }) {
       {plan.checkouts.map((counter) => (
         <Counter key={counter.id} counter={counter} />
       ))}
+    </group>
+  );
+}
+
+/**
+ * Lukkede rom, som lageret bak vareutleveringen. Rommet har tak – skal man ikke
+ * inn dit, er det ingen grunn til å se innredningen – og én luke mot butikken.
+ */
+function Rooms({ plan }: { plan: StorePlan }) {
+  const t = 0.24;
+
+  return (
+    <group>
+      {plan.rooms.map((room) => {
+        const h = room.heightCm / 100;
+        const { opening } = room;
+        const vertical = opening.side === 'west' || opening.side === 'east';
+        const wallX = opening.side === 'west' ? room.x : room.x + room.w;
+        const wallY = opening.side === 'north' ? room.y : room.y + room.d;
+
+        // Veggen med luken deles i to; de tre andre står hele.
+        const before = opening.at;
+        const after = (vertical ? room.d : room.w) - opening.at - opening.width;
+
+        const walls: Array<{ key: string; cx: number; cz: number; w: number; d: number }> = vertical
+          ? [
+              { key: 'a', cx: wallX, cz: room.y + before / 2, w: t, d: before },
+              {
+                key: 'b',
+                cx: wallX,
+                cz: room.y + room.d - after / 2,
+                w: t,
+                d: after,
+              },
+              { key: 'c', cx: room.x + room.w - (opening.side === 'west' ? 0 : room.w), cz: 0, w: 0, d: 0 },
+            ]
+          : [];
+
+        // Motstående vegg og de to tverrveggene.
+        const rest = vertical
+          ? [
+              {
+                key: 'opp',
+                cx: opening.side === 'west' ? room.x + room.w : room.x,
+                cz: room.y + room.d / 2,
+                w: t,
+                d: room.d,
+              },
+              { key: 'n', cx: room.x + room.w / 2, cz: room.y, w: room.w, d: t },
+              { key: 's', cx: room.x + room.w / 2, cz: room.y + room.d, w: room.w, d: t },
+            ]
+          : [
+              {
+                key: 'opp',
+                cx: room.x + room.w / 2,
+                cz: opening.side === 'north' ? room.y + room.d : room.y,
+                w: room.w,
+                d: t,
+              },
+              { key: 'w', cx: room.x, cz: room.y + room.d / 2, w: t, d: room.d },
+              { key: 'e', cx: room.x + room.w, cz: room.y + room.d / 2, w: t, d: room.d },
+              { key: 'a', cx: room.x + before / 2, cz: wallY, w: before, d: t },
+              { key: 'b', cx: room.x + room.w - after / 2, cz: wallY, w: after, d: t },
+            ];
+
+        const all = [...walls.filter((wall) => wall.w > 0 || wall.d > 0), ...rest];
+
+        return (
+          <group key={room.id}>
+            {all.map((wall) => (
+              <mesh
+                key={wall.key}
+                position={[wall.cx, h / 2, wall.cz]}
+                castShadow
+                receiveShadow
+              >
+                <boxGeometry args={[Math.max(wall.w, t), h, Math.max(wall.d, t)]} />
+                <meshStandardMaterial color={C.floorEdge} roughness={1} />
+              </mesh>
+            ))}
+
+            {/* tak */}
+            <mesh position={[room.x + room.w / 2, h + 0.06, room.y + room.d / 2]} castShadow receiveShadow>
+              <boxGeometry args={[room.w + t, 0.12, room.d + t]} />
+              <meshStandardMaterial color={C.shelf} roughness={1} />
+            </mesh>
+
+            {/* luken markeres på gulvet foran åpningen */}
+            <mesh
+              rotation={[-Math.PI / 2, 0, 0]}
+              position={[
+                vertical
+                  ? wallX + (opening.side === 'west' ? -0.9 : 0.9)
+                  : room.x + opening.at + opening.width / 2,
+                0.012,
+                vertical
+                  ? room.y + opening.at + opening.width / 2
+                  : wallY + (opening.side === 'north' ? -0.9 : 0.9),
+              ]}
+            >
+              <planeGeometry args={vertical ? [1.6, opening.width] : [opening.width, 1.6]} />
+              <meshBasicMaterial color={C.sage} />
+            </mesh>
+          </group>
+        );
+      })}
     </group>
   );
 }
@@ -331,12 +417,21 @@ function useSceneLabels(plan: StorePlan, targets: MapTarget[]): SceneLabel[] {
       };
     });
 
-    for (const counter of plan.checkouts) {
-      if (counter.kind === 'checkout' && counter.id !== 'co-1') continue;
+    const firstCheckout = plan.checkouts[0];
+    if (firstCheckout) {
       labels.push({
-        key: counter.id,
-        text: counter.kind === 'checkout' ? 'Kasser' : counter.name,
-        position: [counter.x + counter.w / 2, 1.6, counter.y + counter.d / 2],
+        key: firstCheckout.id,
+        text: 'Kasser',
+        position: [firstCheckout.x + firstCheckout.w / 2, 1.6, firstCheckout.y + firstCheckout.d / 2],
+        className: 'scene__tag--soft',
+      });
+    }
+
+    for (const room of plan.rooms) {
+      labels.push({
+        key: room.id,
+        text: room.name,
+        position: [room.x + room.w / 2, room.heightCm / 100 + 0.5, room.y + room.d / 2],
         className: 'scene__tag--soft',
       });
     }
@@ -526,16 +621,21 @@ function CameraRig({ plan, targets, route, insets, yaw, fitToken }: RigProps) {
   return (
     <OrbitControls
       ref={controls}
-      enableRotate={false}
+      /* Fallvinkelen er låst, så modellen holder seg isometrisk uansett hvordan
+         man snurrer den. To fingre roterer og zoomer, én finger flytter. */
+      enableRotate
+      minPolarAngle={Math.PI / 2 - PITCH}
+      maxPolarAngle={Math.PI / 2 - PITCH}
       enableDamping
-      dampingFactor={0.16}
+      dampingFactor={0.14}
+      rotateSpeed={0.7}
       zoomSpeed={0.9}
       mouseButtons={{
         LEFT: THREE.MOUSE.PAN,
         MIDDLE: THREE.MOUSE.DOLLY,
-        RIGHT: THREE.MOUSE.PAN,
+        RIGHT: THREE.MOUSE.ROTATE,
       }}
-      touches={{ ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN }}
+      touches={{ ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE }}
       onStart={() => {
         moved.current = true;
       }}
@@ -622,6 +722,7 @@ function Scene({
       <Slab plan={plan} picking={picking} onPick={onPick} />
       <Perimeter plan={plan} />
       <Entrances plan={plan} />
+      <Rooms plan={plan} />
       <Checkouts plan={plan} />
       <Fixtures plan={plan} targets={targets} />
       {route && route.length > 1 && <Route route={route} />}

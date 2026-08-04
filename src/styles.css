@@ -947,10 +947,18 @@ input {
   stroke-width: 0.09;
 }
 
-.plan__checkout--pickup {
-  fill: var(--shelf-dept);
-  stroke: var(--map-ink);
-  stroke-width: 0.11;
+/* Lukkede rom er tildekket – man ser taket, ikke innredningen. */
+.plan__room {
+  fill: var(--floor-edge);
+  stroke: var(--map-ink-soft);
+  stroke-width: 0.16;
+  stroke-linejoin: round;
+}
+
+.plan__opening {
+  stroke: var(--sage);
+  stroke-width: 0.3;
+  stroke-linecap: round;
 }
 
 .plan__belt {

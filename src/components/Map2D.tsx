@@ -545,24 +545,49 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
           {plan.checkouts.map((counter) => (
             <g key={counter.id}>
               <rect
-                className={`plan__checkout${counter.kind === 'pickup' ? ' plan__checkout--pickup' : ''}`}
+                className="plan__checkout"
                 x={counter.x}
                 y={counter.y}
                 width={counter.w}
                 height={counter.d}
                 rx={0.12}
               />
-              {counter.kind === 'checkout' && (
-                <line
-                  className="plan__belt"
-                  x1={counter.x + 0.2}
-                  y1={counter.y + counter.d / 2}
-                  x2={counter.x + counter.w - 0.5}
-                  y2={counter.y + counter.d / 2}
-                />
-              )}
+              <line
+                className="plan__belt"
+                x1={counter.x + 0.2}
+                y1={counter.y + counter.d / 2}
+                x2={counter.x + counter.w - 0.5}
+                y2={counter.y + counter.d / 2}
+              />
             </g>
           ))}
+
+          {/* lukkede rom, som lageret bak vareutleveringen */}
+          {plan.rooms.map((room) => {
+            const vertical = room.opening.side === 'west' || room.opening.side === 'east';
+            const wallX = room.opening.side === 'west' ? room.x : room.x + room.w;
+            const wallY = room.opening.side === 'north' ? room.y : room.y + room.d;
+            const from = room.opening.at;
+            const to = room.opening.at + room.opening.width;
+            return (
+              <g key={room.id}>
+                <rect
+                  className="plan__room"
+                  x={room.x}
+                  y={room.y}
+                  width={room.w}
+                  height={room.d}
+                />
+                <line
+                  className="plan__opening"
+                  x1={vertical ? wallX : room.x + from}
+                  y1={vertical ? room.y + from : wallY}
+                  x2={vertical ? wallX : room.x + to}
+                  y2={vertical ? room.y + to : wallY}
+                />
+              </g>
+            );
+          })}
 
           {/* reolseksjoner */}
           {plan.fixtures.map((fixture) => {
@@ -703,19 +728,28 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
             {entrance.name}
           </div>
         ))}
-        {plan.checkouts
-          .filter((counter) => counter.kind !== 'checkout' || counter.id === 'co-1')
-          .map((counter) => (
-            <div
-              key={counter.id}
-              className="scene__tag scene__tag--soft"
-              style={{
-                transform: `translate(${(counter.x + counter.w / 2) * transform.k + transform.x}px, ${(counter.y + counter.d + 0.9) * transform.k + transform.y}px) translate(-50%, -50%)`,
-              }}
-            >
-              {counter.kind === 'checkout' ? 'Kasser' : counter.name}
-            </div>
-          ))}
+        {plan.checkouts.slice(0, 1).map((counter) => (
+          <div
+            key={counter.id}
+            className="scene__tag scene__tag--soft"
+            style={{
+              transform: `translate(${(counter.x + counter.w / 2) * transform.k + transform.x}px, ${(counter.y + counter.d + 0.9) * transform.k + transform.y}px) translate(-50%, -50%)`,
+            }}
+          >
+            Kasser
+          </div>
+        ))}
+        {plan.rooms.map((room) => (
+          <div
+            key={room.id}
+            className="scene__tag scene__tag--soft"
+            style={{
+              transform: `translate(${(room.x + room.w / 2) * transform.k + transform.x}px, ${(room.y + room.d / 2) * transform.k + transform.y}px) translate(-50%, -50%)`,
+            }}
+          >
+            {room.name}
+          </div>
+        ))}
         {plan.landmarks
           .filter((landmark) => landmark.id !== 'lm-kasser')
           .map((landmark) => (
