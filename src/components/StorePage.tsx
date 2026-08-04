@@ -4,6 +4,7 @@ import type { Chain, Product, Store, StorePlan, Vec2 } from '../data/types';
 import { buildDirections } from '../lib/directions';
 import { fixtureAccessPoint, pathLength, productMarker, shelfPosition } from '../lib/geometry';
 import { buildNavGrid, findRoute, type RouteResult } from '../lib/pathfinding';
+import { useSettings } from '../lib/settings';
 import { useShoppingList } from '../lib/shoppingList';
 import { createWalkSimulator, type Fix } from '../lib/positioning';
 import { planTour, type Tour } from '../lib/tour';
@@ -42,8 +43,9 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
   const [plan, setPlan] = useState<StorePlan | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // 3D er standardvisningen – det er der man kjenner igjen butikken.
-  const [view, setView] = useState<View>('3d');
+  // Standardvisningen settes i profilen; 3D er utgangspunktet.
+  const [settings] = useSettings();
+  const [view, setView] = useState<View>(() => settings.defaultView);
   const [browseDepartment, setBrowseDepartment] = useState<string | null>(null);
   const [initialQuery, setInitialQuery] = useState('');
   const [storeInfoOpen, setStoreInfoOpen] = useState(false);
@@ -359,6 +361,7 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
     origin,
     fix,
     picking: false,
+    showLabels: settings.showLabels,
     insets,
     onPick: () => {},
   };

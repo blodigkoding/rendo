@@ -19,6 +19,12 @@ export const MAP_PALETTE = {
   shelfDim: '#eeece6',
   shelfDept: '#e0e3db',
   shelfLine: '#cbc8c0',
+  /** Kjøl og frys: kjølige, metalliske toner så de skiller seg fra tørrvarer. */
+  cold: '#dde5e7',
+  coldDim: '#eaeff0',
+  coldDept: '#d3e0e2',
+  coldEdge: '#c8d3d5',
+  coldTrim: '#aebdc1',
   /** Tre: benkeplater, hyllekanter, disker. */
   wood: '#c9a97b',
   woodShade: '#ab8a5d',

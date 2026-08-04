@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react';
 import type { Chain, Store } from '../data/types';
 import { readRecents } from '../lib/recents';
+import { useSettings } from '../lib/settings';
 import { ChainLogo } from './ChainLogo';
-import { ChevronRight, ListIcon } from './icons';
+import { ChevronRight, CubeIcon, ListIcon, PlanIcon, StoreIcon } from './icons';
 
 /**
- * Profilfanen: hvilken butikk man handler i, veien til handlelista, og de siste
- * søkene. Selve lista bor i sin egen fane.
+ * Profilen.
+ *
+ * Det finnes ingen innlogging i rendo ennå, så dette er en demoprofil. Den er
+ * satt opp som en vanlig profilside: hvem du er øverst, så det du bruker
+ * appen til, så innstillinger, så litt om appen.
  */
 
 interface Props {
@@ -19,6 +23,59 @@ interface Props {
   onOpenStoreInfo: () => void;
 }
 
+function Row({
+  icon,
+  label,
+  value,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button className="prow" onClick={onClick} type="button">
+      <span className="prow__icon">{icon}</span>
+      <span className="prow__label">{label}</span>
+      {value && <span className="prow__value">{value}</span>}
+      <ChevronRight />
+    </button>
+  );
+}
+
+function Toggle({
+  label,
+  hint,
+  on,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  on: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  return (
+    <div className="prow prow--static">
+      <span className="prow__label">
+        {label}
+        {hint && <span className="prow__hint">{hint}</span>}
+      </span>
+      <button
+        className="switch"
+        data-on={on}
+        onClick={() => onChange(!on)}
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
+        type="button"
+      >
+        <span className="switch__knob" />
+      </button>
+    </div>
+  );
+}
+
 export function ProfilePage({
   store,
   chain,
@@ -29,46 +86,50 @@ export function ProfilePage({
   onOpenStoreInfo,
 }: Props) {
   const [recents, setRecents] = useState<string[]>([]);
+  const [settings, setSettings] = useSettings();
+
   useEffect(() => setRecents(readRecents()), []);
 
   return (
     <div className="overlay overlay--flat">
       <div className="overlay__body">
-        <header className="info__head">
-          <h2>Min profil</h2>
-          <p>Butikken din og det du har søkt etter</p>
+        <header className="profile__head">
+          <span className="profile__avatar" aria-hidden="true">
+            AB
+          </span>
+          <div>
+            <h2>Adrian</h2>
+            <p>Demoprofil · ingen innlogging ennå</p>
+          </div>
         </header>
 
-        <button className="profile__store" onClick={onOpenStoreInfo} type="button">
-          <span className="profile__store-mark">
-            {chain ? <ChainLogo chain={chain} size={13} /> : null}
-          </span>
-          <span className="profile__store-main">
-            <span className="row__name">{store.name}</span>
-            <span className="row__sub">
-              {store.address} · {store.distanceKm.toFixed(1).replace('.', ',')} km
-            </span>
-          </span>
-          <ChevronRight />
-        </button>
-
-        <button className="profile__store" onClick={onOpenList} type="button">
-          <span className="profile__store-mark">
-            <ListIcon size={18} />
-          </span>
-          <span className="profile__store-main">
-            <span className="row__name">Handleliste</span>
-            <span className="row__sub">
-              {listCount === 0
-                ? 'Ingen varer ennå'
-                : `${listCount} ${listCount === 1 ? 'vare' : 'varer'}`}
-            </span>
-          </span>
-          <ChevronRight />
-        </button>
+        <section className="block">
+          <div className="block__title meta">Handelen din</div>
+          <div className="prows">
+            <Row
+              icon={<ListIcon size={18} />}
+              label="Handleliste"
+              value={
+                listCount === 0 ? 'Tom' : `${listCount} ${listCount === 1 ? 'vare' : 'varer'}`
+              }
+              onClick={onOpenList}
+            />
+            <Row
+              icon={chain ? <ChainLogo chain={chain} size={12} /> : <StoreIcon size={18} />}
+              label="Butikken din"
+              value={store.name}
+              onClick={onOpenStoreInfo}
+            />
+            <Row
+              icon={<StoreIcon size={18} />}
+              label="Bytt butikk"
+              onClick={onSwitchStore}
+            />
+          </div>
+        </section>
 
         {recents.length > 0 && (
-          <div className="block">
+          <section className="block">
             <div className="block__title meta">Siste søk</div>
             <div className="chips">
               {recents.map((term) => (
@@ -77,13 +138,59 @@ export function ProfilePage({
                 </button>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
-        <button className="info__switch" onClick={onSwitchStore} type="button">
-          Bytt butikk
-          <ChevronRight />
-        </button>
+        <section className="block">
+          <div className="block__title meta">Visning</div>
+          <div className="prows">
+            <div className="prow prow--static">
+              <span className="prow__label">Butikken åpner i</span>
+              <div className="viewswitch viewswitch--inline">
+                <button
+                  data-active={settings.defaultView === '2d'}
+                  onClick={() => setSettings({ defaultView: '2d' })}
+                  type="button"
+                >
+                  <PlanIcon size={14} />
+                  Plan
+                </button>
+                <button
+                  data-active={settings.defaultView === '3d'}
+                  onClick={() => setSettings({ defaultView: '3d' })}
+                  type="button"
+                >
+                  <CubeIcon size={14} />
+                  3D
+                </button>
+              </div>
+            </div>
+            <Toggle
+              label="Avdelingsnavn i kartet"
+              hint="Navnene som står oppå reolene"
+              on={settings.showLabels}
+              onChange={(on) => setSettings({ showLabels: on })}
+            />
+          </div>
+        </section>
+
+        <section className="block">
+          <div className="block__title meta">Om rendo</div>
+          <div className="prows">
+            <div className="prow prow--static">
+              <span className="prow__label">Versjon</span>
+              <span className="prow__value">0.1.0 · demo</span>
+            </div>
+            <div className="prow prow--static">
+              <span className="prow__label">Butikkdata</span>
+              <span className="prow__value">Demodata</span>
+            </div>
+          </div>
+          <p className="profile__note">
+            Butikkene, varene og plasseringene er laget for demonstrasjon. Når rendo kobles til
+            kjedenes egne plan- og planogramdata, kommer alt herfra i stedet.
+          </p>
+        </section>
       </div>
     </div>
   );

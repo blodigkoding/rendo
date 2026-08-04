@@ -65,7 +65,10 @@
 html,
 body,
 #root {
-  height: 100%;
+  /* dvh følger det som faktisk er synlig når nettleserlinja skjuler seg. */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 body {
@@ -101,11 +104,17 @@ input {
 /* ---------- telefonen ---------- */
 
 .stage {
-  height: 100%;
+  position: fixed;
+  inset: 0;
   display: grid;
   place-items: center;
   background: #000;
   overflow: hidden;
+}
+
+.stage__fit {
+  position: relative;
+  flex: none;
 }
 
 .device {
@@ -116,6 +125,7 @@ input {
   border-radius: 54px;
   overflow: hidden;
   flex: none;
+  transform-origin: top left;
   /* Nettleseren skal aldri zoome selv – kartet håndterer knip. */
   touch-action: manipulation;
   /* Rammen har ingen fysisk safe area, men home-indikatoren trenger plass. */
@@ -1214,6 +1224,153 @@ input {
 
 /* profil */
 
+.profile__head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 22px 16px 18px;
+}
+
+.profile__avatar {
+  flex: none;
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.profile__head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+}
+
+.profile__head p {
+  margin: 2px 0 0;
+  font-size: 13.5px;
+  color: var(--ink-3);
+}
+
+.prows {
+  border-radius: var(--round-md);
+  border: 1px solid var(--line);
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.prow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 54px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-3);
+  text-align: left;
+}
+
+.prow:last-child {
+  border-bottom: 0;
+}
+
+.prow--static {
+  cursor: default;
+}
+
+button.prow:active {
+  background: var(--surface);
+}
+
+.prow__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-width: 22px;
+  color: var(--ink);
+}
+
+.prow__label {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.prow__hint {
+  display: block;
+  font-size: 12px;
+  color: var(--ink-3);
+  margin-top: 1px;
+}
+
+.prow__value {
+  flex: none;
+  font-size: 14px;
+  color: var(--ink-3);
+  max-width: 45%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.switch {
+  flex: none;
+  width: 51px;
+  height: 31px;
+  border-radius: var(--round);
+  background: var(--line-strong);
+  padding: 2px;
+  transition: background 0.2s ease;
+}
+
+.switch[data-on='true'] {
+  background: var(--ink);
+}
+
+.switch__knob {
+  display: block;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.2s cubic-bezier(0.3, 1.2, 0.4, 1);
+}
+
+.switch[data-on='true'] .switch__knob {
+  transform: translateX(20px);
+}
+
+.viewswitch--inline {
+  flex: none;
+  background: var(--surface-2);
+  border: 0;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.viewswitch--inline button {
+  height: 32px;
+  font-size: 12.5px;
+}
+
+.profile__note {
+  margin: 12px 2px 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-3);
+}
+
 .profile__store {
   display: flex;
   align-items: center;
@@ -1552,49 +1709,83 @@ input {
   line-height: 1.45;
 }
 
+/* Raden sett ovenfra: du kommer inn fra venstre, merket er varen. */
 .along__bar {
   position: relative;
-  height: 34px;
-  margin-top: 14px;
+  height: 62px;
+  margin-top: 16px;
+  padding-left: 22px;
 }
 
-.along__run {
+.along__label {
   position: absolute;
-  top: 8px;
-  left: 0;
-  right: 0;
-  height: 10px;
-  border-radius: var(--round);
-  background: var(--surface-2);
-  border: 1px solid var(--line);
-}
-
-.along__mark {
-  position: absolute;
-  top: 3px;
-  width: 4px;
-  height: 20px;
-  margin-left: -2px;
-  border-radius: 2px;
-  background: var(--ink);
-}
-
-.along__end {
-  position: absolute;
-  top: 22px;
+  top: 0;
   font-size: 11px;
   color: var(--ink-3);
 }
 
-.along__end--start {
+.along__label--start {
   left: 0;
 }
 
-.along__end--far {
+.along__run {
+  position: absolute;
+  left: 22px;
   right: 0;
+  top: 22px;
+  height: 22px;
+  display: flex;
+  gap: 1px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--line);
 }
 
-/* hylleillustrasjon *//* hylleillustrasjon */
+.along__tick {
+  flex: 1;
+  background: var(--surface-2);
+}
+
+/* Pilen som viser hvilken vei man går inn. */
+.along__you {
+  position: absolute;
+  left: 0;
+  top: 27px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  border-left: 9px solid var(--ink);
+}
+
+.along__mark {
+  position: absolute;
+  top: 16px;
+  left: 0;
+  margin-left: 22px;
+  transform: translateX(-50%);
+}
+
+.along__mark-dot {
+  display: block;
+  width: 10px;
+  height: 34px;
+  margin: 0 auto;
+  border-radius: 5px;
+  background: var(--ink);
+  box-shadow: 0 0 0 3px var(--bg);
+}
+
+.along__mark-label {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* hylleillustrasjon *//* hylleillustrasjon *//* hylleillustrasjon */
 
 .shelf {
   flex: none;

@@ -3,6 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Line, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import type { Checkout, StorePlan, Vec2 } from '../data/types';
+import { FACING_VECTOR } from '../lib/geometry';
 import { MAP_PALETTE as C } from '../lib/palette';
 import type { MapInsets, MapTarget, MapViewProps } from './Map2D';
 import { LabelLayer, LabelProjector, type LabelNodes, type SceneLabel } from './SceneLabels';
@@ -82,30 +83,83 @@ function Fixtures({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) 
     place(caps.current, () => CAP, (f) => PLINTH + body(f) + CAP / 2, 1.04);
   }, [plan]);
 
-  // Fargene endres når man velger en vare.
+  // Fargene endres når man velger en vare – og forteller hva slags innredning
+  // det er: kjøl og frys er kjølige og metalliske, tørrvarer varme med treplate.
   useEffect(() => {
     const colour = new THREE.Color();
     plan.fixtures.forEach((f, i) => {
       const isTarget = targetFixtures.has(f.id);
       const inDept = targetDepartments.has(f.departmentId);
+      const cold = f.type === 'cooler' || f.type === 'freezer';
+      const base = cold ? C.cold : f.type === 'island' ? C.shelf : C.shelf;
       const shelf = isTarget
         ? C.ink
         : inDept
-          ? C.shelfDept
+          ? cold
+            ? C.coldDept
+            : C.shelfDept
           : targetFixtures.size > 0
-            ? C.shelfDim
-            : C.shelf;
+            ? cold
+              ? C.coldDim
+              : C.shelfDim
+            : base;
       bodies.current?.setColorAt(i, colour.set(shelf));
-      plinths.current?.setColorAt(i, colour.set(isTarget ? C.ink : C.floorEdge));
-      caps.current?.setColorAt(i, colour.set(isTarget ? C.ink : C.wood));
+      plinths.current?.setColorAt(i, colour.set(isTarget ? C.ink : cold ? C.coldEdge : C.floorEdge));
+      caps.current?.setColorAt(
+        i,
+        colour.set(isTarget ? C.ink : cold ? C.coldTrim : C.wood),
+      );
     });
     for (const mesh of [bodies.current, plinths.current, caps.current]) {
       if (mesh?.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
   }, [plan, targetFixtures, targetDepartments]);
 
+  /** Glassfronten på kjøl og lokket på frysekummene, tegnet for seg. */
+  const glass = useMemo(() => {
+    return plan.fixtures
+      .filter((f) => f.type === 'cooler' || f.type === 'freezer')
+      .map((f) => {
+        const height = f.heightCm / 100;
+        const chest = f.type === 'freezer' && f.heightCm < 120;
+        const n = FACING_VECTOR[f.facing];
+        return {
+          id: f.id,
+          chest,
+          // Kummen får lokk på toppen, skapet glass i fronten.
+          position: chest
+            ? ([f.x + f.w / 2, height + 0.02, f.y + f.d / 2] as const)
+            : ([
+                f.x + f.w / 2 + (n.x * f.w) / 2,
+                height * 0.62,
+                f.y + f.d / 2 + (n.y * f.d) / 2,
+              ] as const),
+          size: chest
+            ? ([f.w * 0.92, 0.05, f.d * 0.92] as const)
+            : ([
+                n.x !== 0 ? 0.04 : f.w * 0.94,
+                height * 0.62,
+                n.x !== 0 ? f.d * 0.94 : 0.04,
+              ] as const),
+        };
+      });
+  }, [plan]);
+
   return (
     <group>
+      {glass.map((piece) => (
+        <mesh key={piece.id} position={[...piece.position]}>
+          <boxGeometry args={[...piece.size]} />
+          <meshStandardMaterial
+            color={piece.chest ? '#dbe6ea' : '#c6d5da'}
+            transparent
+            opacity={piece.chest ? 0.7 : 0.45}
+            roughness={0.25}
+            metalness={0.1}
+          />
+        </mesh>
+      ))}
+
       <instancedMesh ref={plinths} args={[undefined, undefined, count]} castShadow receiveShadow>
         <boxGeometry />
         <meshStandardMaterial roughness={0.9} />
@@ -324,9 +378,11 @@ function Slab({
 }
 
 /** Lav brystning langs ytterveggen. */
-function Perimeter({ plan }: { plan: StorePlan }) {
+function Perimeter({ plan, tall }: { plan: StorePlan; tall?: boolean }) {
   const thickness = 0.18;
-  const height = 0.55;
+  // Sett ovenfra holder det med en lav brystning. Går man inne i butikken må
+  // veggene stå i full høyde, ellers mister øyet all følelse av størrelse.
+  const height = tall ? plan.wallHeightCm / 100 : 0.55;
 
   const walls = plan.outline.map((point, index) => {
     const next = plan.outline[(index + 1) % plan.outline.length];
@@ -518,7 +574,7 @@ function TargetMarker({ target }: { target: MapTarget }) {
 function FirstPerson({ fix }: { fix: Fix }) {
   const camera = useRef<THREE.PerspectiveCamera>(null);
   const look = useRef(new THREE.Vector3());
-  const eye = 1.62;
+  const eye = 1.65;
 
   useFrame((_, delta) => {
     const cam = camera.current;
@@ -527,9 +583,10 @@ function FirstPerson({ fix }: { fix: Fix }) {
     cam.position.lerp(new THREE.Vector3(fix.point.x, eye, fix.point.y), lerp);
     look.current.lerp(
       new THREE.Vector3(
-        fix.point.x + Math.cos(fix.heading) * 4,
-        eye - 0.25,
-        fix.point.y + Math.sin(fix.heading) * 4,
+        // Blikket senkes litt, som når man ser etter varer i hylla.
+        fix.point.x + Math.cos(fix.heading) * 6,
+        eye - 0.5,
+        fix.point.y + Math.sin(fix.heading) * 6,
       ),
       lerp,
     );
@@ -540,7 +597,9 @@ function FirstPerson({ fix }: { fix: Fix }) {
     <PerspectiveCamera
       ref={camera}
       makeDefault
-      fov={72}
+      /* 60° leser som et menneskeøye på en telefon. Bredere gjør at hyller ser
+         lavere ut enn de er. */
+      fov={60}
       near={0.05}
       far={200}
       position={[fix.point.x, eye, fix.point.y]}
@@ -747,6 +806,7 @@ function Scene({
   insets,
   onPick,
   fix,
+  showLabels = true,
   yaw,
   fitToken,
   labels,
@@ -789,7 +849,18 @@ function Scene({
       )}
 
       <Slab plan={plan} picking={picking} onPick={onPick} />
-      <Perimeter plan={plan} />
+
+      {/* Tak, bare når man går inne – da blir rommet et rom. */}
+      {fix && (
+        <mesh
+          rotation={[Math.PI / 2, 0, 0]}
+          position={[plan.width / 2, plan.wallHeightCm / 100, plan.depth / 2]}
+        >
+          <planeGeometry args={[plan.width * 1.2, plan.depth * 1.2]} />
+          <meshStandardMaterial color="#f4f3f0" roughness={1} side={THREE.DoubleSide} />
+        </mesh>
+      )}
+      <Perimeter plan={plan} tall={Boolean(fix)} />
       <Entrances plan={plan} />
       <Rooms plan={plan} />
       <Checkouts plan={plan} />
@@ -800,7 +871,7 @@ function Scene({
         <TargetMarker key={item.id} target={item} />
       ))}
 
-      <LabelProjector labels={labels} nodes={labelNodes} />
+      {showLabels && <LabelProjector labels={labels} nodes={labelNodes} />}
       {fix ? (
         <FirstPerson fix={fix} />
       ) : (
@@ -845,7 +916,7 @@ export function Map3D(props: MapViewProps) {
         />
       </Canvas>
 
-      <LabelLayer labels={labels} nodes={labelNodes} />
+      {props.showLabels !== false && <LabelLayer labels={labels} nodes={labelNodes} />}
 
       {!props.fix && (
       <div className="map__zoom" style={{ right: 12 + insets.right, bottom: 16 + insets.bottom }}>

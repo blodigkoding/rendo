@@ -1,6 +1,6 @@
 import type { Fixture, Product } from '../data/types';
 import type { DirectionStep } from '../lib/directions';
-import { formatMeters, formatWalkTime, type ShelfPosition } from '../lib/geometry';
+import { fixtureTypeName, formatMeters, formatWalkTime, type ShelfPosition } from '../lib/geometry';
 import { BottomSheet, type SheetSnap } from './BottomSheet';
 import { ProductImage } from './ProductImage';
 import {
@@ -77,24 +77,38 @@ export function ShelfDiagram({
 }
 
 /**
- * Hvor langt inn i gangen seksjonen står. Reolrader er lange, så «seksjon
- * G1-01» sier ingenting alene – det er meterne inn i gangen man trenger.
+ * Hvor langt inn i gangen seksjonen står.
+ *
+ * En reolrad er tolv–femten meter lang, så seksjonskoden alene sier ingenting
+ * om hvor man skal stoppe. Her vises raden ovenfra: du kommer inn fra den ene
+ * enden, og merket viser hvor varen står.
  */
 function AislePosition({ position, aisle }: { position: ShelfPosition; aisle: string }) {
+  const where =
+    position.fraction < 0.25
+      ? 'rett innenfor der du kommer inn i gangen'
+      : position.fraction < 0.6
+        ? 'omtrent midtveis i gangen'
+        : 'nesten helt innerst i gangen';
+
   return (
     <div className="along">
       <div className="along__text">
-        <strong>{formatMeters(position.metersIn)} inn i {aisle.toLowerCase()}</strong>
-        <p>
-          Regnet fra enden nærmest inngangen. Seksjon {position.index} av {position.count} i raden.
-        </p>
+        <strong>Gå {formatMeters(position.metersIn)} inn i {aisle.toLowerCase()}</strong>
+        <p>Varen står {where}.</p>
       </div>
+
       <div className="along__bar" aria-hidden="true">
-        <span className="along__run" />
-        <span className="along__mark" style={{ left: `${position.fraction * 100}%` }} />
-        <span className="along__end along__end--start">Inngang</span>
-        <span className="along__end along__end--far">
-          {formatMeters(position.runLength)}
+        <span className="along__label along__label--start">Du kommer inn her</span>
+        <span className="along__run">
+          {Array.from({ length: Math.min(position.count, 14) }, (_, i) => (
+            <span key={i} className="along__tick" />
+          ))}
+        </span>
+        <span className="along__you" />
+        <span className="along__mark" style={{ left: `${position.fraction * 100}%` }}>
+          <span className="along__mark-dot" />
+          <span className="along__mark-label">{formatMeters(position.metersIn)}</span>
         </span>
       </div>
     </div>
@@ -133,7 +147,9 @@ export function ProductSheet({
       <div className="sheet__title">
         <div className="meta">{product.brand}</div>
         <h2>{product.name}</h2>
-        <div className="sheet__where">{departmentName}</div>
+        <div className="sheet__where">
+          {departmentName} · {fixtureTypeName(fixture)}
+        </div>
       </div>
       <div className="sheet__price">
         <strong>{price(product.price)}</strong>
@@ -214,7 +230,9 @@ export function ProductSheet({
             <strong>
               Hylle {product.placement.level} av {fixture.levels}
             </strong>
-            <p>{product.placement.heightCm} cm over gulv</p>
+            <p>
+              {product.placement.heightCm} cm over gulv, i {fixtureTypeName(fixture, true)}
+            </p>
             {arrived && (
               <span className="arrival__mark">
                 <ArriveIcon size={14} />

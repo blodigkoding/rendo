@@ -8,8 +8,6 @@ import { useEffect, useState, type ReactNode } from 'react';
 
 const SCREEN_W = 402;
 const SCREEN_H = 874;
-/** Under denne bredden er vi på en ekte telefon – da droppes rammen. */
-const BARE_BREAKPOINT = 520;
 
 function StatusBar() {
   const [now, setNow] = useState(() => new Date());
@@ -82,28 +80,49 @@ function useNoBrowserZoom() {
   }, []);
 }
 
+/** Er appen installert på hjemskjermen? Da skal den fylle skjermen. */
+function isStandalone() {
+  if (typeof window === 'undefined') return false;
+  const nav = window.navigator as Navigator & { standalone?: boolean };
+  return window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
+}
+
 export function DeviceFrame({ children }: { children: ReactNode }) {
-  const [bare, setBare] = useState(
-    () => typeof window !== 'undefined' && window.innerWidth <= BARE_BREAKPOINT,
-  );
+  const [bare] = useState(isStandalone);
   const [scale, setScale] = useState(1);
 
   useNoBrowserZoom();
 
+  /**
+   * `100%` og `100vh` måler layout-viewporten, som på mobil er høyere enn det
+   * man faktisk ser under adresselinja. Da havner bunnen av telefonen utenfor
+   * skjermen. Vi måler den synlige viewporten i stedet.
+   */
   useEffect(() => {
+    if (bare) return;
+    const view = window.visualViewport;
+
     const update = () => {
-      setBare(window.innerWidth <= BARE_BREAKPOINT);
-      const fit = Math.min(
-        (window.innerHeight - 56) / SCREEN_H,
-        (window.innerWidth - 56) / SCREEN_W,
-        1,
-      );
-      setScale(Math.max(0.4, fit));
+      const width = view?.width ?? window.innerWidth;
+      const height = view?.height ?? window.innerHeight;
+      // Litt luft rundt, men aldri så mye at telefonen ikke får plass.
+      const margin = Math.min(40, height * 0.05);
+      const fit = Math.min((height - margin) / SCREEN_H, (width - margin) / SCREEN_W, 1);
+      setScale(Math.max(0.3, fit));
     };
+
     update();
+    view?.addEventListener('resize', update);
+    view?.addEventListener('scroll', update);
     window.addEventListener('resize', update);
-    return () => window.removeEventListener('resize', update);
-  }, []);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      view?.removeEventListener('resize', update);
+      view?.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, [bare]);
 
   if (bare) {
     return (
@@ -115,17 +134,27 @@ export function DeviceFrame({ children }: { children: ReactNode }) {
 
   return (
     <div className="stage">
+      {/*
+        Ytterboksen har den skalerte størrelsen. Uten den ville nettleseren
+        forsøkt å sentrere en boks på 874 piksler i en skjerm som er lavere, og
+        da klippes bunnen bort i stedet for å sentreres.
+      */}
       <div
-        className="device"
-        style={{
-          width: SCREEN_W,
-          height: SCREEN_H,
-          transform: `scale(${scale})`,
-        }}
+        className="stage__fit"
+        style={{ width: SCREEN_W * scale, height: SCREEN_H * scale }}
       >
-        <StatusBar />
-        <div className="device__app">{children}</div>
-        <div className="device__home" aria-hidden="true" />
+        <div
+          className="device"
+          style={{
+            width: SCREEN_W,
+            height: SCREEN_H,
+            transform: `scale(${scale})`,
+          }}
+        >
+          <StatusBar />
+          <div className="device__app">{children}</div>
+          <div className="device__home" aria-hidden="true" />
+        </div>
       </div>
     </div>
   );

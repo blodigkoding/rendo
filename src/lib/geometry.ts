@@ -126,3 +126,30 @@ export function shelfPosition(
     fraction: Math.min(1, Math.max(0, metersIn / runLength)),
   };
 }
+
+
+/**
+ * Hva slags innredning varen står i, på norsk. Det er forskjell på å lete i en
+ * tørrvarereol og i en frysekum, og det bør stå.
+ */
+export function fixtureTypeName(fixture: Fixture, definite = false): string {
+  const [indefinite, def] = ((): [string, string] => {
+    switch (fixture.type) {
+      case 'cooler':
+        return ['kjøledisk', 'kjøledisken'];
+      case 'freezer':
+        return fixture.heightCm < 120
+          ? ['frysekum', 'frysekummen']
+          : ['fryseskap', 'fryseskapet'];
+      case 'island':
+        return ['utstillingsbord', 'utstillingsbordet'];
+      case 'wall':
+        return ['vegghylle', 'vegghylla'];
+      case 'service':
+        return ['betjent disk', 'den betjente disken'];
+      default:
+        return ['reol', 'reolen'];
+    }
+  })();
+  return definite ? def : indefinite;
+}

@@ -35,6 +35,8 @@ export interface MapViewProps {
   /** Hvor kunden er akkurat nå, når veibeskrivelsen spilles av. */
   fix?: Fix | null;
   picking: boolean;
+  /** Avdelingsnavn i kartet – skrus av og på i profilen. */
+  showLabels?: boolean;
   insets: MapInsets;
   onPick: (point: Vec2) => void;
 }
@@ -113,7 +115,17 @@ function useAnnotations(plan: StorePlan) {
   }, [plan]);
 }
 
-export function Map2D({ plan, targets, route, origin, fix, picking, insets, onPick }: MapViewProps) {
+export function Map2D({
+  plan,
+  targets,
+  route,
+  origin,
+  fix,
+  picking,
+  showLabels = true,
+  insets,
+  onPick,
+}: MapViewProps) {
   const targetFixtures = useMemo(() => new Set(targets.map((t) => t.fixture.id)), [targets]);
   const targetDepartments = useMemo(() => new Set(targets.map((t) => t.departmentId)), [targets]);
   const hasTargets = targets.length > 0;
@@ -599,8 +611,8 @@ export function Map2D({ plan, targets, route, origin, fix, picking, insets, onPi
    * samme størrelse og flyter ikke når man zoomer. Er man zoomet langt ut, er
    * det ikke plass til navnene – da vises de ikke.
    */
-  const showDeptLabels = transform.k >= 9;
-  const showAisleLabels = transform.k >= 11;
+  const showDeptLabels = showLabels && transform.k >= 9;
+  const showAisleLabels = showLabels && transform.k >= 11;
 
   /** Etiketter som ville lagt seg oppå hverandre, dropper vi. */
   const placedLabels = useMemo(() => {
