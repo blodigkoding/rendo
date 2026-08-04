@@ -5,7 +5,7 @@
  * `src/assets/logoer/` med kjede-id som filnavn, plukkes de opp herfra.
  * Uten fil tegner appen et navnetrekk i stedet – se `ChainLogo`.
  */
-const FILES = import.meta.glob('../assets/logoer/*.{svg,png,webp}', {
+const FILES = import.meta.glob('../assets/logoer/*.{svg,png,webp,jpg,jpeg,avif}', {
   eager: true,
   query: '?url',
   import: 'default',

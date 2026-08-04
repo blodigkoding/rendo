@@ -1,11 +1,13 @@
+import { useId } from 'react';
 import type { Product } from '../data/types';
 
 /**
  * Produktbilder.
  *
- * Vi har ingen fotokilde, så bildene tegnes: emballasjen varen faktisk kommer i,
- * med etikett og lokk i en farge som følger avdelingen. Det gir gjenkjennelige
- * bilder i lista uten nett, og byttes ut i det øyeblikket ekte foto legges i
+ * Vi har ingen fotokilde, så bildene tegnes – men de tegnes som bilder, ikke som
+ * ikoner: emballasjen varen faktisk kommer i, med merkenavn på etiketten, lys
+ * fra venstre, skygge under og en lys studiobakgrunn bak. Da leses de som
+ * produktbilder i lista, og de byttes ut i det øyeblikket ekte foto legges i
  * `src/assets/produkter/` – se `ProductImage`.
  */
 
@@ -80,12 +82,13 @@ const DEPARTMENT_FALLBACK: Record<string, PackageShape> = {
   tekstil: 'textile',
   verktoy: 'tool',
   bilpleie: 'bottle',
-  bildeler: 'box',
-  elverktoy: 'tool',
+  bilmc: 'box',
   bygg: 'bag',
   fritid: 'box',
   bat: 'textile',
-  sykkel: 'tool',
+  hjem: 'box',
+  jernvare: 'tool',
+  multimedia: 'box',
   senger: 'furniture',
   madrasser: 'furniture',
   sengetoy: 'textile',
@@ -232,7 +235,7 @@ export function ProductArt({ product, size = 34 }: Props) {
   const spec = SHAPES[shape];
   const seed = hash(product.departmentId + product.brand);
   const label = LABEL_COLORS[seed % LABEL_COLORS.length];
-  const clipId = `art-${product.id}`;
+  const uid = useId().replace(/:/g, '');
 
   return (
     <svg
@@ -241,20 +244,37 @@ export function ProductArt({ product, size = 34 }: Props) {
       height={size}
       viewBox="0 0 32 32"
       role="img"
-      aria-label={`Illustrasjon av ${product.name}`}
+      aria-label={`Bilde av ${product.name}`}
     >
       <defs>
-        <clipPath id={clipId}>
+        <clipPath id={`c${uid}`}>
           <path d={spec.body} />
         </clipPath>
+        {/* Studiobakgrunn: lys vegg som går over i et bord. */}
+        <linearGradient id={`b${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#ffffff" />
+          <stop offset="1" stopColor="#ebe8e2" />
+        </linearGradient>
+        {/* Lys fra venstre, skyggeside til høyre – det er dette som gir volum. */}
+        <linearGradient id={`v${uid}`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#ffffff" stopOpacity="0.75" />
+          <stop offset="0.42" stopColor="#ffffff" stopOpacity="0" />
+          <stop offset="1" stopColor="#1d211f" stopOpacity="0.17" />
+        </linearGradient>
+        <radialGradient id={`s${uid}`}>
+          <stop offset="0" stopColor="#1d211f" stopOpacity="0.28" />
+          <stop offset="1" stopColor="#1d211f" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
-      {/* selve emballasjen */}
-      <path d={spec.body} fill="#f4f1eb" />
+      <rect width="32" height="32" rx="7" fill={`url(#b${uid})`} />
 
-      <g clipPath={`url(#${clipId})`}>
-        {/* skyggeside, så formen får volum */}
-        <rect x="20" y="0" width="12" height="32" fill="#000" opacity="0.05" />
+      {/* Slagskygge på underlaget. */}
+      <ellipse cx="16.4" cy="28.4" rx="9.6" ry="2.1" fill={`url(#s${uid})`} />
+
+      <path d={spec.body} fill="#f6f4ef" />
+
+      <g clipPath={`url(#c${uid})`}>
         {spec.label && (
           <>
             <rect x="0" y={spec.label.y} width="32" height={spec.label.h} fill={label} />
@@ -267,7 +287,7 @@ export function ProductArt({ product, size = 34 }: Props) {
               fontSize={spec.label.h > 7 ? 3 : 2.4}
               fontWeight="700"
               letterSpacing="0.1"
-              opacity="0.9"
+              opacity="0.92"
             >
               {product.brand.slice(0, 9)}
             </text>
@@ -282,9 +302,19 @@ export function ProductArt({ product, size = 34 }: Props) {
           </>
         )}
         {spec.cap && <path d={spec.cap} fill={label} opacity="0.85" />}
+        <rect x="0" y="0" width="32" height="32" fill={`url(#v${uid})`} />
+        {/* Glansstripe, som på en pakke i butikklys. */}
+        <rect x="9.4" y="0" width="1.5" height="32" fill="#fff" opacity="0.45" />
       </g>
 
-      <g fill="none" stroke="#2f3a34" strokeWidth={1.1} strokeLinejoin="round" strokeLinecap="round">
+      <g
+        fill="none"
+        stroke="#2f3a34"
+        strokeWidth={0.8}
+        strokeOpacity={0.55}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      >
         <path d={spec.body} />
         {spec.cap && <path d={spec.cap} />}
         {spec.details && <path d={spec.details} />}

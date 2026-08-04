@@ -8,6 +8,8 @@ import {
   ArriveIcon,
   CheckIcon,
   CloseIcon,
+  CubeIcon,
+  PlanIcon,
   PlusCircleIcon,
   RouteIcon,
   StraightIcon,
@@ -27,15 +29,15 @@ interface Props {
   /** Ruten er gått ferdig – da er det hylla som gjelder. */
   arrived: boolean;
   /** Veibeskrivelsen spilles av med posisjon i butikken. */
-  walking: boolean;
   inList: boolean;
   picking: boolean;
   snap: SheetSnap;
   onSnapChange: (snap: SheetSnap) => void;
   onShowRoute: () => void;
   onClearRoute: () => void;
-  onWalk: () => void;
-  onStopWalk: () => void;
+  /** Plan eller 3D mens man går. */
+  view: '2d' | '3d';
+  onViewChange: (view: '2d' | '3d') => void;
   onArrived: () => void;
   onToggleList: () => void;
   onClose: () => void;
@@ -126,15 +128,14 @@ export function ProductSheet({
   routeMeters,
   steps,
   arrived,
-  walking,
   inList,
   picking,
   snap,
   onSnapChange,
   onShowRoute,
   onClearRoute,
-  onWalk,
-  onStopWalk,
+  view,
+  onViewChange,
   onArrived,
   onToggleList,
   onClose,
@@ -184,15 +185,30 @@ export function ProductSheet({
             {formatMeters(routeMeters)} · {formatWalkTime(routeMeters)}
           </span>
         </div>
-        {walking ? (
-          <button className="btn btn--sm btn--ghost" onClick={onStopWalk} type="button">
-            Stopp
+        {/*
+          Mens man går, er det ene valget som betyr noe: se veien ovenfra, eller
+          se den slik man faktisk står i butikken.
+        */}
+        <div className="routebar__view" role="group" aria-label="Visning">
+          <button
+            type="button"
+            data-active={view === '2d'}
+            aria-pressed={view === '2d'}
+            onClick={() => onViewChange('2d')}
+          >
+            <PlanIcon size={14} />
+            Plan
           </button>
-        ) : (
-          <button className="btn btn--sm" onClick={onWalk} type="button">
-            Gå
+          <button
+            type="button"
+            data-active={view === '3d'}
+            aria-pressed={view === '3d'}
+            onClick={() => onViewChange('3d')}
+          >
+            <CubeIcon size={14} />
+            3D
           </button>
-        )}
+        </div>
         <button className="btn btn--sm btn--ghost" onClick={onArrived} type="button">
           Framme
         </button>

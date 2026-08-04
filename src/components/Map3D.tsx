@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentRef } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentRef, type RefObject } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Line, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import * as THREE from 'three';
@@ -8,6 +8,7 @@ import { MAP_PALETTE as C } from '../lib/palette';
 import type { MapInsets, MapTarget, MapViewProps } from './Map2D';
 import { LabelLayer, LabelProjector, type LabelNodes, type SceneLabel } from './SceneLabels';
 import type { Fix } from '../lib/positioning';
+import type { Look } from '../lib/deviceLook';
 import { FitIcon, RotateLeftIcon, RotateRightIcon } from './icons';
 
 /**
@@ -788,25 +789,46 @@ function TargetMarker({ target }: { target: MapTarget }) {
  * går. Posisjonen kommer fra `PositionSource` – i dag simulert, senere fra
  * faste punkter i butikken.
  */
-function FirstPerson({ fix }: { fix: Fix }) {
+function FirstPerson({
+  fix,
+  fixRef,
+  look: sensor,
+}: {
+  fix: Fix;
+  fixRef?: RefObject<Fix | null>;
+  look?: RefObject<Look>;
+}) {
   const camera = useRef<THREE.PerspectiveCamera>(null);
   const look = useRef(new THREE.Vector3());
+  const target = useRef(new THREE.Vector3());
   const eye = 1.65;
+  // Blikket senkes litt, som når man ser etter varer i hylla.
+  const basePitch = Math.atan2(-0.5, 6);
 
   useFrame((_, delta) => {
     const cam = camera.current;
     if (!cam) return;
+    // Fersk posisjon om vi har den; ellers den siste som ble tegnet.
+    const now = fixRef?.current ?? fix;
     const lerp = Math.min(1, delta * 8);
-    cam.position.lerp(new THREE.Vector3(fix.point.x, eye, fix.point.y), lerp);
-    look.current.lerp(
-      new THREE.Vector3(
-        // Blikket senkes litt, som når man ser etter varer i hylla.
-        fix.point.x + Math.cos(fix.heading) * 6,
-        eye - 0.5,
-        fix.point.y + Math.sin(fix.heading) * 6,
-      ),
-      lerp,
+    cam.position.lerp(new THREE.Vector3(now.point.x, eye, now.point.y), lerp);
+
+    /*
+      Sensoren legges oppå gangretningen. Snur du telefonen mot venstre, snur
+      blikket mot venstre – derfor trekkes yaw fra: i planet vokser retningen
+      med klokka sett ovenfra, mens telefonen måler mot klokka.
+    */
+    const heading = now.heading - (sensor?.current.yaw ?? 0);
+    const pitch = basePitch + (sensor?.current.pitch ?? 0);
+    const flat = Math.cos(pitch) * 6;
+
+    target.current.set(
+      now.point.x + Math.cos(heading) * flat,
+      eye + Math.sin(pitch) * 6,
+      now.point.y + Math.sin(heading) * flat,
     );
+    // Sensoren skal følge hånda uten etterslep; går man bare, glir blikket.
+    look.current.lerp(target.current, sensor ? Math.min(1, delta * 20) : lerp);
     cam.lookAt(look.current);
   });
 
@@ -818,7 +840,8 @@ function FirstPerson({ fix }: { fix: Fix }) {
          lavere ut enn de er. */
       fov={60}
       near={0.05}
-      far={200}
+      /* Butikken er noen titalls meter – alt bak det er likevel vegg. */
+      far={70}
       position={[fix.point.x, eye, fix.point.y]}
     />
   );
@@ -1023,6 +1046,8 @@ function Scene({
   insets,
   onPick,
   fix,
+  fixRef,
+  look,
   showLabels = true,
   yaw,
   fitToken,
@@ -1091,7 +1116,7 @@ function Scene({
 
       {showLabels && <LabelProjector labels={labels} nodes={labelNodes} />}
       {fix ? (
-        <FirstPerson fix={fix} />
+        <FirstPerson fix={fix} fixRef={fixRef} look={look ?? undefined} />
       ) : (
         <CameraRig
         plan={plan}
@@ -1119,7 +1144,12 @@ export function Map3D(props: MapViewProps) {
     <div className={`map map--scene${picking ? ' map--picking' : ''}`}>
       <Canvas
         className="map__canvas"
-        dpr={[1, 2]}
+        /*
+          Førstepersonsvisningen står inne i geometrien, så nesten hver piksel
+          tegnes flere ganger. Der teller flyt mer enn skarphet, og vi tegner i
+          lavere oppløsning. Sett ovenfra er det motsatt.
+        */
+        dpr={props.fix ? [1, 1.3] : [1, 2]}
         shadows
         flat /* ingen tone mapping – hvitt skal være hvitt */
         orthographic

@@ -177,3 +177,17 @@ export const CubeIcon = ({ size = 16 }: IconProps) => (
     <path d="M4 7.5l8 4.5 8-4.5M12 12v9" />
   </svg>
 );
+
+export const CompassIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <circle cx="12" cy="12" r="8.6" />
+    <path d="M15.2 8.8l-1.9 4.5-4.5 1.9 1.9-4.5 4.5-1.9z" />
+  </svg>
+);
+
+export const CenterIcon = ({ size = 16 }: IconProps) => (
+  <svg {...base(size)} aria-hidden="true">
+    <circle cx="12" cy="12" r="3.2" />
+    <path d="M12 3.5v3M12 17.5v3M3.5 12h3M17.5 12h3" />
+  </svg>
+);

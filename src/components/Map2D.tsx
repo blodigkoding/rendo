@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { Fixture, StorePlan, Vec2 } from '../data/types';
 import { FACING_VECTOR, rectCenter } from '../lib/geometry';
 import { toPathData } from '../lib/polygon';
 import type { Fix } from '../lib/positioning';
+import type { Look } from '../lib/deviceLook';
 import { MinusIcon, PlusIcon } from './icons';
 
 /** En vare kartet skal peke ut. Handlelista gir flere om gangen. */
@@ -34,6 +35,10 @@ export interface MapViewProps {
   origin: Vec2 | null;
   /** Hvor kunden er akkurat nå, når veibeskrivelsen spilles av. */
   fix?: Fix | null;
+  /** Samme posisjon, men fersk hvert bilde – 3D-kameraet leser den herfra. */
+  fixRef?: RefObject<Fix | null>;
+  /** Hvor telefonen peker, når man ser seg rundt med bevegelsessensoren. */
+  look?: RefObject<Look> | null;
   picking: boolean;
   /** Avdelingsnavn i kartet – skrus av og på i profilen. */
   showLabels?: boolean;

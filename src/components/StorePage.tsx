@@ -10,6 +10,7 @@ import { createWalkSimulator, type Fix } from '../lib/positioning';
 import { planTour, type Tour } from '../lib/tour';
 import { sheetHeight, type SheetSnap } from './BottomSheet';
 import { Map2D, type MapInsets, type MapTarget } from './Map2D';
+import { useDeviceLook } from '../lib/deviceLook';
 import { ProductSheet } from './ProductSheet';
 import { ScanButton } from './ScanButton';
 import { SearchOverlay } from './SearchOverlay';
@@ -19,7 +20,7 @@ import { StoreInfo } from './StoreInfo';
 import type { Tab } from './TabBar';
 import { TourSheet } from './TourSheet';
 import { ChainLogo } from './ChainLogo';
-import { BackIcon, CubeIcon, PlanIcon, SearchIcon } from './icons';
+import { BackIcon, CenterIcon, CompassIcon, CubeIcon, PlanIcon, SearchIcon } from './icons';
 
 /** three.js lastes først når noen faktisk ber om 3D. */
 const Map3D = lazy(() => import('./Map3D').then((module) => ({ default: module.Map3D })));
@@ -61,6 +62,13 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
   const [arrived, setArrived] = useState(false);
   const [walking, setWalking] = useState(false);
   const [fix, setFix] = useState<Fix | null>(null);
+  /** Fersk posisjon, lest av 3D-kameraet hvert bilde uten å tegne siden på nytt. */
+  const fixRef = useRef<Fix | null>(null);
+  /** Følger vi en vei akkurat nå? */
+  const routeActive = Boolean(route || tour);
+  /** Førsteperson finnes bare i 3D – i planen ser man seg selv ovenfra. */
+  const firstPerson = Boolean(fix) && view === '3d';
+  const deviceLook = useDeviceLook(firstPerson);
   const [routeError, setRouteError] = useState<string | null>(null);
 
   const list = useShoppingList(storeId);
@@ -182,16 +190,32 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
 
   const routePoints = tour ? tour.points : route ? route.points : null;
 
-  // Veibeskrivelsen spilles av fra en posisjonskilde. I dag er den simulert;
-  // når butikken har faste punkter innvendig byttes kilden ut her.
+  /*
+    Veibeskrivelsen spilles av fra en posisjonskilde. I dag er den simulert; når
+    butikken har faste punkter innvendig byttes kilden ut her.
+
+    Posisjonen kommer én gang per bilde. Å legge den i React-tilstand ville tegnet
+    hele siden på nytt seksti ganger i sekundet – og det er nettopp det som gjorde
+    3D-visningen tung. I stedet skrives den i en ref som kameraet leser rett fra,
+    og tilstanden oppdateres bare når teksten faktisk endrer seg.
+  */
   useEffect(() => {
     if (!walking || !routePoints || routePoints.length < 2) return;
     const source = createWalkSimulator(routePoints);
-    return source.subscribe(setFix);
+    let lastPublished = -1;
+    return source.subscribe((next) => {
+      fixRef.current = next;
+      if (Math.abs(next.travelled - lastPublished) < 0.35) return;
+      lastPublished = next.travelled;
+      setFix(next);
+    });
   }, [walking, routePoints]);
 
   useEffect(() => {
-    if (!walking) setFix(null);
+    if (!walking) {
+      fixRef.current = null;
+      setFix(null);
+    }
   }, [walking]);
 
   const clearRoute = useCallback(() => {
@@ -227,6 +251,15 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
     return plan?.entrances[0]?.position ?? null;
   }, [fix, plan]);
 
+  /*
+    Veien vises i planen, og man går med én gang. Å måtte trykke «gå» etterpå er
+    et ekstra steg som ikke gir noe: har du bedt om veien, skal du dit.
+  */
+  const startWalking = useCallback(() => {
+    setView('2d');
+    setWalking(true);
+  }, []);
+
   const showRoute = useCallback(
     (intent: 'single' | 'tour') => {
       const point = startPoint();
@@ -253,6 +286,7 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
         setOrigin(planned.legs[0].route.points[0]);
         setRouteError(null);
         setSnap('half');
+        startWalking();
         return;
       }
 
@@ -266,8 +300,9 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
       setRoute(found);
       setRouteError(null);
       setSnap('half');
+      startWalking();
     },
-    [grid, plan, startPoint, fixture, list.items, listProducts, fixtureById, setTab],
+    [grid, plan, startPoint, fixture, list.items, listProducts, fixtureById, setTab, startWalking],
   );
 
   /** Huker av en vare underveis og legger resten av ruten fra det punktet. */
@@ -361,8 +396,10 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
     route: routePoints && routePoints.length > 1 ? routePoints : null,
     origin,
     fix,
+    fixRef,
+    look: deviceLook.active ? deviceLook.look : null,
     picking: false,
-    showLabels: settings.showLabels,
+    showLabels: settings.showLabels && !fix,
     insets,
     onPick: () => {},
   };
@@ -392,6 +429,12 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
       </header>
 
       <div className="store__stage" ref={stageRef}>
+        {/*
+          Følger man en vei, forsvinner søkefeltet og visningsvelgeren. Da er
+          skjermen ruta – og valget mellom plan og 3D ligger nede ved veien,
+          der hånda er.
+        */}
+        {!routeActive && (
         <div className="topbar">
           <button
             className="searchbar"
@@ -424,6 +467,38 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
             </button>
           </div>
         </div>
+        )}
+
+        {/*
+          Se seg rundt: i førstepersonsvisningen kan man snu telefonen og se seg
+          om i butikken. iOS krever at vi spør om sensoren fra et trykk, så det
+          må være en knapp – den kan ikke slå seg på av seg selv.
+        */}
+        {firstPerson && deviceLook.supported && (
+          <div className="map__look" style={{ top: 62 + insets.top }}>
+            <button
+              type="button"
+              data-active={deviceLook.active}
+              aria-pressed={deviceLook.active}
+              onClick={deviceLook.toggle}
+            >
+              <CompassIcon />
+              <span>{deviceLook.active ? 'Ser deg rundt' : 'Se deg rundt'}</span>
+            </button>
+            {deviceLook.active && (
+              <button type="button" aria-label="Midtstill blikket" onClick={deviceLook.recenter}>
+                <CenterIcon />
+              </button>
+            )}
+          </div>
+        )}
+
+        {firstPerson && deviceLook.denied && (
+          <div className="hint" style={{ bottom: 16 + insets.bottom }}>
+            Telefonen ga ikke tilgang til bevegelsessensoren. Slå den på under
+            Innstillinger → Safari → Bevegelse og retning.
+          </div>
+        )}
 
         {product && chain?.scanApp && (
           <div className="map__scan" style={{ bottom: 16 + insets.bottom }}>
@@ -478,19 +553,18 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
             routeMeters={routeMeters}
             steps={steps}
             arrived={arrived}
-            walking={walking}
             inList={list.has(product.id)}
             picking={false}
             snap={snap}
             onSnapChange={setSnap}
             onShowRoute={() => showRoute('single')}
             onClearRoute={clearRoute}
-            onWalk={() => {
-              setWalking(true);
-              setView('3d');
-              setSnap('peek');
+            view={view}
+            onViewChange={(next) => {
+              setView(next);
+              // I 3D skal man se butikken, ikke arket.
+              setSnap(next === '3d' ? 'peek' : 'half');
             }}
-            onStopWalk={() => setWalking(false)}
             onArrived={() => {
               setWalking(false);
               setArrived(true);

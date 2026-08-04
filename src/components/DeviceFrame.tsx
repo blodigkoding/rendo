@@ -80,15 +80,38 @@ function useNoBrowserZoom() {
   }, []);
 }
 
-/** Er appen installert på hjemskjermen? Da skal den fylle skjermen. */
-function isStandalone() {
+/**
+ * Skal appen fylle skjermen?
+ *
+ * På en ekte telefon gir det ingen mening å tegne en telefon rundt appen – da
+ * er rammen bare svarte kanter som stjeler plass. Vi fyller skjermen når appen
+ * er installert på hjemskjermen, og når vi faktisk står på en telefon: en
+ * berøringsskjerm der korteste side er under 550 punkter. Et smalt vindu på en
+ * PC har fin peker og får rammen som før.
+ */
+function isPhone() {
   if (typeof window === 'undefined') return false;
   const nav = window.navigator as Navigator & { standalone?: boolean };
-  return window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
+  if (window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true) {
+    return true;
+  }
+  const shortSide = Math.min(window.innerWidth, window.innerHeight);
+  return window.matchMedia('(pointer: coarse)').matches && shortSide <= 550;
 }
 
 export function DeviceFrame({ children }: { children: ReactNode }) {
-  const [bare] = useState(isStandalone);
+  const [bare, setBare] = useState(isPhone);
+
+  // Rotasjon og skjermbytte kan endre svaret.
+  useEffect(() => {
+    const update = () => setBare(isPhone());
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, []);
   const [scale, setScale] = useState(1);
 
   useNoBrowserZoom();
