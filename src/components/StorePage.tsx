@@ -29,7 +29,9 @@ interface Props {
 type View = '2d' | '3d';
 type PickIntent = 'single' | 'tour' | null;
 
-const SEARCHBAR_INSET = 74;
+const SEARCHBAR_INSET = 78;
+/** Den flytende fanelinja tar plass nederst i kartet. */
+const TABBAR_INSET = 84;
 
 export function StorePage({ storeId, onSwitchStore }: Props) {
   const [store, setStore] = useState<Store | null>(null);
@@ -280,7 +282,9 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
     () => ({
       top: SEARCHBAR_INSET,
       right: 0,
-      bottom: sheetOpen && stageHeight > 0 ? sheetHeight(stageHeight, snap) : 0,
+      bottom:
+        TABBAR_INSET +
+        (sheetOpen && stageHeight > 0 ? sheetHeight(stageHeight - TABBAR_INSET, snap) : 0),
     }),
     [sheetOpen, snap, stageHeight],
   );
@@ -495,9 +499,10 @@ export function StorePage({ storeId, onSwitchStore }: Props) {
             }}
           />
         )}
-      </div>
 
-      <TabBar active={tab} listCount={list.items.length} onSelect={setTab} />
+
+        <TabBar active={tab} listCount={list.items.length} onSelect={setTab} />
+      </div>
     </div>
   );
 }

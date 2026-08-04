@@ -121,6 +121,9 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
   const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, k: 20 });
   const { aisleLabels, deptLabels } = useAnnotations(plan);
 
+  /** Har brukeren flyttet eller zoomet kartet selv? */
+  const moved = useRef(false);
+
   // Peker-tilstand for panorering, pinch, treghet og dobbelttrykk.
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef({
@@ -242,11 +245,21 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
     fitTo({ x: 0, y: 0, w: plan.width, d: plan.depth }, 20, 40, true);
   }, [size.w, plan, fitTo]);
 
-  // Zoom til ruten når den finnes, ellers til de valgte varene.
+  // Zoom til ruten når den finnes, ellers til de valgte varene. Har brukeren
+  // flyttet kartet selv, lar vi det stå – ingenting er mer irriterende enn et
+  // kart som hopper tilbake.
   const routeKey = route ? `${route.length}:${route[0]?.x},${route[0]?.y}` : '';
   const targetKey = targets.map((t) => t.id).join(',');
+  const lastFitKey = useRef('');
   useEffect(() => {
     if (size.w === 0) return;
+    const key = `${routeKey}|${targetKey}`;
+    if (key !== lastFitKey.current) {
+      lastFitKey.current = key;
+      moved.current = false;
+    } else if (moved.current) {
+      return;
+    }
     if (route && route.length > 1) {
       const xs = route.map((p) => p.x);
       const ys = route.map((p) => p.y);
@@ -302,6 +315,7 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
 
   const zoomAt = useCallback(
     (factor: number, cx: number, cy: number) => {
+      moved.current = true;
       stopAnimation();
       setTransform((t) => {
         const k = Math.min(MAX_K, Math.max(MIN_K, t.k * factor));
@@ -369,6 +383,7 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
       const midY = (a.y + b.y) / 2;
 
       if (gesture.current.pinchDist > 0) {
+        moved.current = true;
         const local = toLocal(midX, midY);
         const panX = (midX - gesture.current.pinchX) / scale;
         const panY = (midY - gesture.current.pinchY) / scale;
@@ -393,6 +408,7 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
     const dy = (next.y - previous.y) / scale;
     gesture.current.moved += Math.abs(dx) + Math.abs(dy);
     if (gesture.current.moved > 4) {
+      moved.current = true;
       const now = performance.now();
       const dt = Math.max(1, now - gesture.current.lastTime);
       gesture.current.velocityX = dx / dt;
@@ -444,6 +460,7 @@ export function Map2D({ plan, targets, route, origin, picking, insets, onPick }:
 
   /** Knappezoom mot midten av det synlige kartet, animert. */
   const zoomStep = (factor: number) => {
+    moved.current = true;
     const { w, h } = sizeRef.current;
     const cx = (w - insets.right) / 2;
     const cy = insets.top + (h - insets.top - insets.bottom) / 2;

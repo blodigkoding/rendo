@@ -348,9 +348,24 @@ function CameraRig({ plan, targets, route, insets, yaw, fitToken }: RigProps) {
   const desiredTarget = useRef(new THREE.Vector3());
   const desiredPosition = useRef(new THREE.Vector3());
   const desiredZoom = useRef(20);
+  /** Har brukeren flyttet modellen selv? Da lar vi den stå. */
+  const moved = useRef(false);
+  const lastFitKey = useRef('');
 
   useEffect(() => {
     const ortho = camera as THREE.OrthographicCamera;
+    const key = [
+      route ? `r${route.length}` : '',
+      targets.map((t) => t.id).join(','),
+      yaw.toFixed(2),
+      fitToken,
+    ].join('|');
+    if (key !== lastFitKey.current) {
+      lastFitKey.current = key;
+      moved.current = false;
+    } else if (moved.current) {
+      return;
+    }
 
     // Punktene som skal få plass i bildet.
     const focus: Vec2[] =
@@ -419,6 +434,10 @@ function CameraRig({ plan, targets, route, insets, yaw, fitToken }: RigProps) {
   }, [plan, targets, route, yaw, insets, size.width, size.height, camera, fitToken]);
 
   useFrame((_, delta) => {
+    if (moved.current) {
+      controls.current?.update();
+      return;
+    }
     const ortho = camera as THREE.OrthographicCamera;
     const lerp = Math.min(1, delta * 3.4);
     camera.position.lerp(desiredPosition.current, lerp);
@@ -443,6 +462,9 @@ function CameraRig({ plan, targets, route, insets, yaw, fitToken }: RigProps) {
         RIGHT: THREE.MOUSE.PAN,
       }}
       touches={{ ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN }}
+      onStart={() => {
+        moved.current = true;
+      }}
     />
   );
 }

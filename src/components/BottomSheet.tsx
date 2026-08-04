@@ -33,7 +33,8 @@ export function BottomSheet({ snap, onSnapChange, header, children, footer, labe
   useEffect(() => {
     const parent = hostRef.current?.parentElement;
     if (!parent) return;
-    const observer = new ResizeObserver(([entry]) => setAvailable(entry.contentRect.height));
+    // Trekk fra plassen den flytende fanelinja tar.
+    const observer = new ResizeObserver(([entry]) => setAvailable(entry.contentRect.height - 84));
     observer.observe(parent);
     return () => observer.disconnect();
   }, []);

@@ -32,12 +32,21 @@
   --map-ink: #2f3a34;
   --map-ink-soft: #5c665e;
 
-  /* iOS-glass */
-  --glass: rgba(255, 255, 255, 0.62);
-  --glass-strong: rgba(255, 255, 255, 0.82);
-  --glass-line: rgba(255, 255, 255, 0.55);
-  --glass-shadow: 0 6px 24px rgba(24, 28, 25, 0.12);
-  --blur: saturate(180%) blur(22px);
+  /* iOS-glass: gjennomsiktig, kraftig blur og metning, lys kant på toppen */
+  --glass: rgba(255, 255, 255, 0.28);
+  --glass-strong: rgba(255, 255, 255, 0.42);
+  --glass-line: rgba(255, 255, 255, 0.42);
+  --glass-shadow:
+    0 10px 34px rgba(18, 22, 19, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+  --blur: saturate(200%) blur(34px);
+
+  /* Maks avrunding – alt som kan bli kapsel, blir kapsel. */
+  --round: 999px;
+  --round-lg: 30px;
+  --round-md: 22px;
+  --tabbar-h: 60px;
 
   --radius: 3px;
   --radius-lg: 14px;
@@ -206,7 +215,7 @@ input {
   height: 46px;
   padding: 0 18px;
   border: 1px solid var(--accent);
-  border-radius: 10px;
+  border-radius: var(--round);
   background: var(--accent);
   color: var(--on-accent);
   font-size: 15px;
@@ -232,9 +241,9 @@ input {
 
 .btn--sm {
   height: 34px;
-  padding: 0 13px;
+  padding: 0 15px;
   font-size: 13px;
-  border-radius: 8px;
+  border-radius: var(--round);
 }
 
 .btn:disabled {
@@ -329,11 +338,11 @@ input {
   display: flex;
   align-items: center;
   gap: 9px;
-  height: 44px;
-  padding: 0 13px;
+  height: 46px;
+  padding: 0 16px;
   background: var(--surface-2);
   border: 1px solid transparent;
-  border-radius: 11px;
+  border-radius: var(--round);
   flex: 1;
   min-width: 0;
   transition: border-color 0.15s ease, background 0.15s ease;
@@ -427,7 +436,7 @@ input {
   flex-direction: column;
   gap: 2px;
   padding: 10px 10px 12px;
-  border-radius: 18px;
+  border-radius: var(--round-md);
   background: var(--glass-strong);
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
@@ -449,7 +458,7 @@ input {
   display: block;
   height: 96px;
   margin-bottom: 8px;
-  border-radius: 12px;
+  border-radius: 18px;
   background: var(--backdrop);
   overflow: hidden;
 }
@@ -569,7 +578,7 @@ input {
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
   border: 1px solid var(--glass-line);
-  border-radius: 14px;
+  border-radius: var(--round);
   box-shadow: var(--glass-shadow);
 }
 
@@ -578,8 +587,8 @@ input {
   align-items: center;
   gap: 5px;
   height: 38px;
-  padding: 0 11px;
-  border-radius: 9px;
+  padding: 0 13px;
+  border-radius: var(--round);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -595,14 +604,19 @@ input {
 /* fanelinje nederst */
 
 .tabbar {
-  flex: none;
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: calc(10px + var(--safe-bottom));
   display: flex;
-  border-top: 1px solid rgba(255, 255, 255, 0.6);
+  height: var(--tabbar-h);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--round);
   background: var(--glass-strong);
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
-  padding-bottom: var(--safe-bottom);
-  z-index: 12;
+  box-shadow: var(--glass-shadow);
+  z-index: 14;
 }
 
 .tabbar__tab {
@@ -610,8 +624,9 @@ input {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 7px 0 5px;
+  justify-content: center;
+  gap: 1px;
+  border-radius: var(--round);
   font-size: 10.5px;
   font-weight: 500;
   letter-spacing: -0.005em;
@@ -650,7 +665,7 @@ input {
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
   border: 1px solid var(--glass-line);
-  border-radius: 14px;
+  border-radius: var(--round);
   color: var(--ink-2);
   text-align: left;
   box-shadow: var(--glass-shadow);
@@ -741,7 +756,7 @@ input {
   z-index: 3;
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
+  border-radius: var(--round-md);
   background: var(--glass);
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
@@ -1051,7 +1066,7 @@ input {
   z-index: 20;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.72);
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
   animation: overlay-in 0.2s ease;
@@ -1132,7 +1147,7 @@ input {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-bottom: calc(24px + var(--safe-bottom));
+  padding-bottom: calc(var(--tabbar-h) + 34px + var(--safe-bottom));
 }
 
 .overlay__back {
@@ -1168,7 +1183,7 @@ input {
 }
 
 .chip {
-  padding: 8px 13px;
+  padding: 9px 15px;
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   font-size: 14px;
@@ -1188,7 +1203,7 @@ input {
 .dept {
   padding: 15px 13px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 18px;
   background: var(--surface);
   font-size: 14px;
   letter-spacing: -0.01em;
@@ -1231,7 +1246,7 @@ input {
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--bg);
   color: var(--ink-2);
   overflow: hidden;
@@ -1287,18 +1302,18 @@ input {
 
 .sheet {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 8px;
+  right: 8px;
+  bottom: calc(var(--tabbar-h) + 20px + var(--safe-bottom));
   z-index: 8;
   display: flex;
   flex-direction: column;
-  background: var(--glass-strong);
+  background: rgba(255, 255, 255, 0.72);
   -webkit-backdrop-filter: var(--blur);
   backdrop-filter: var(--blur);
-  border-top: 1px solid rgba(255, 255, 255, 0.7);
-  border-radius: 22px 22px 0 0;
-  box-shadow: 0 -8px 30px rgba(24, 28, 25, 0.14);
+  border: 1px solid var(--glass-line);
+  border-radius: var(--round-lg);
+  box-shadow: var(--glass-shadow);
   transition: height 0.3s cubic-bezier(0.3, 0.8, 0.3, 1);
   animation: sheet-in 0.28s cubic-bezier(0.2, 0.8, 0.3, 1);
   overflow: hidden;
@@ -1340,7 +1355,7 @@ input {
   display: grid;
   place-items: center;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 14px;
   color: var(--ink-2);
   overflow: hidden;
 }
@@ -1397,9 +1412,8 @@ input {
   flex: none;
   display: flex;
   gap: 8px;
-  padding: 10px 14px calc(14px + var(--safe-bottom));
-  border-top: 1px solid rgba(255, 255, 255, 0.6);
-  background: rgba(255, 255, 255, 0.5);
+  padding: 10px 14px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.45);
 }
 
 .sheet__footer > * {
@@ -1735,10 +1749,10 @@ input {
   white-space: nowrap;
   padding: 3px 7px;
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.78);
-  -webkit-backdrop-filter: blur(6px);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 1px 4px rgba(24, 28, 25, 0.1);
+  background: rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: saturate(180%) blur(10px);
+  backdrop-filter: saturate(180%) blur(10px);
+  box-shadow: 0 1px 5px rgba(24, 28, 25, 0.12);
   transition: opacity 0.18s ease;
   will-change: transform;
 }
