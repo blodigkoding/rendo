@@ -10,6 +10,13 @@ export const CHAINS: Chain[] = [
     name: 'REMA 1000',
     accent: '#0d3b8f',
     onAccent: '#ffffff',
+    // Skann og Betal ligger i Æ-appen: du skanner varene selv mens du handler
+    // og betaler i appen i stedet for å stå i kassa.
+    scanApp: {
+      name: 'Skann og Betal',
+      app: 'Æ-appen',
+      url: 'https://www.rema.no/kundeservice/ofte-stilte-sporsmal/hva-er-skann-og-betal-og-hvorfor-skal-jeg-bruke-det/',
+    },
     wordmark: { text: 'REMA 1000', letterSpacing: '0.02em', weight: 700 },
   },
   {

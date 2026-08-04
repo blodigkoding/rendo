@@ -63,6 +63,15 @@ export interface ProduceSpec {
   tables: number;
 }
 
+/** Pallplasser: varer rett fra pallen, som drikke og kampanjer. */
+export interface PalletSpec {
+  dept: string;
+  aisle: number;
+  units: number;
+  x: number;
+  y: number;
+}
+
 /** Frittstående frysekummer på rekke. */
 export interface FreezerSpec {
   dept: string;
@@ -92,6 +101,10 @@ export interface PlanSpec {
   produce?: ProduceSpec;
   /** Frysekummer midt på gulvet. */
   freezers?: FreezerSpec;
+  /** Pallplasser på gulvet. */
+  pallets?: PalletSpec;
+  /** Møblerte utstillingsrom fremst i butikken. */
+  showrooms?: Array<{ name: string; dept: string }>;
   checkouts: number;
   /** Butikken har egen disk for vareutlevering. */
   pickup?: boolean;
@@ -216,13 +229,15 @@ export function buildPlan(spec: PlanSpec): StorePlan {
     }
   }
 
-  // Frukt og grønt: lave bord rett innenfor inngangen.
+  // Frukt og grønt: lave bord rett innenfor inngangen. De ligger på tvers av
+  // fronten, ikke i dybden – slik står de i butikken, så du går forbi hele
+  // avdelingen på vei inn.
   if (spec.produce) {
     const tableW = 1.6;
     const tableD = 1.1;
     for (let i = 0; i < spec.produce.tables; i++) {
-      const row = Math.floor(i / 2);
-      const column = i % 2;
+      const row = i % 2;
+      const column = Math.floor(i / 2);
       fixtures.push({
         id: `fx-produce-${i}`,
         code: `FG-${pad(i + 1)}`,
@@ -238,6 +253,41 @@ export function buildPlan(spec: PlanSpec): StorePlan {
         levels: 2,
       });
     }
+  }
+
+  /*
+    Utstillingsrom: JYSK bygger møblerte rom – soverom, kjøkkenkrok, spisestue –
+    fremst i butikken, og har reolene bak. Et rom er en klynge lave møbler du
+    kan gå rundt, ikke en hylle du plukker fra.
+  */
+  if (spec.showrooms) {
+    spec.showrooms.forEach((room, r) => {
+      const x0 = 1.8 + r * 6.4;
+      // Rommene ligger foran reolene, mellom siste seksjon og kassesonen.
+      const y0 = spec.runY0 + spec.runSections * sectionLength + 1;
+      const pieces: Array<[number, number, number, number, number]> = [
+        // x, y, bredde, dybde, høyde i cm
+        [0, 0, 2.6, 2.0, 60],
+        [3.0, 0.4, 1.4, 1.4, 75],
+        [0.6, 2.8, 3.2, 1.0, 45],
+      ];
+      pieces.forEach(([dx, dy, w, d, h], i) => {
+        fixtures.push({
+          id: `fx-show-${r}-${i}`,
+          code: `U${r + 1}-${pad(i + 1)}`,
+          type: 'island',
+          departmentId: room.dept,
+          aisle: room.name,
+          facing: 'south',
+          x: x0 + dx,
+          y: y0 + dy,
+          w,
+          d,
+          heightCm: h,
+          levels: 1,
+        });
+      });
+    });
   }
 
   // Frysekummer på rekke, som midt på gulvet i en norsk butikk.
@@ -256,6 +306,26 @@ export function buildPlan(spec: PlanSpec): StorePlan {
         d: 1.7,
         heightCm: 90,
         levels: 2,
+      });
+    }
+  }
+
+  // Pallplasser: en halv europall er 0,8 × 1,2 m, og varene stables på den.
+  if (spec.pallets) {
+    for (let i = 0; i < spec.pallets.units; i++) {
+      fixtures.push({
+        id: `fx-pallet-${i}`,
+        code: `PL-${pad(i + 1)}`,
+        type: 'pallet',
+        departmentId: spec.pallets.dept,
+        aisle: `Gang ${spec.pallets.aisle}`,
+        facing: 'south',
+        x: spec.pallets.x + (i % 2) * 1.5,
+        y: spec.pallets.y + Math.floor(i / 2) * 2.1,
+        w: 1.2,
+        d: 1.5,
+        heightCm: 130,
+        levels: 3,
       });
     }
   }

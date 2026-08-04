@@ -143,6 +143,8 @@ export function fixtureTypeName(fixture: Fixture, definite = false): string {
           : ['fryseskap', 'fryseskapet'];
       case 'island':
         return ['utstillingsbord', 'utstillingsbordet'];
+      case 'pallet':
+        return ['pall', 'pallen'];
       case 'wall':
         return ['vegghylle', 'vegghylla'];
       case 'service':

@@ -11,6 +11,25 @@ export interface CatalogItem {
   keywords?: string[];
 }
 
+/**
+ * Sorterer en katalog inn i en annen kjedes avdelinger. To butikker kan selge
+ * mye av det samme og likevel dele det opp helt ulikt: Europris har fjorten
+ * avdelinger, Clas Ohlson fem. Varer som ikke hører hjemme i den nye butikken
+ * utelates.
+ */
+export function remapCatalog(
+  catalog: CatalogItem[],
+  departments: Record<string, string | null>,
+): CatalogItem[] {
+  const map = new Map(Object.entries(departments));
+  const out: CatalogItem[] = [];
+  for (const item of catalog) {
+    const dept = map.get(item.dept);
+    if (dept) out.push({ ...item, dept });
+  }
+  return out;
+}
+
 /** Deterministisk hash – gir samme hylleplassering mellom økter. */
 function hash(input: string): number {
   let h = 2166136261;

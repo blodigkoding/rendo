@@ -11,6 +11,7 @@ import { planTour, type Tour } from '../lib/tour';
 import { sheetHeight, type SheetSnap } from './BottomSheet';
 import { Map2D, type MapInsets, type MapTarget } from './Map2D';
 import { ProductSheet } from './ProductSheet';
+import { ScanButton } from './ScanButton';
 import { SearchOverlay } from './SearchOverlay';
 import { ProfilePage } from './ProfilePage';
 import { ShoppingListPage } from './ShoppingListPage';
@@ -424,6 +425,12 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
           </div>
         </div>
 
+        {product && chain?.scanApp && (
+          <div className="map__scan" style={{ bottom: 16 + insets.bottom }}>
+            <ScanButton chain={chain} product={product} compact />
+          </div>
+        )}
+
         <Suspense fallback={<div className="map map--loading" />}>
           {view === '2d' ? <Map2D {...mapProps} /> : <Map3D {...mapProps} />}
         </Suspense>
@@ -466,6 +473,7 @@ export function StorePage({ storeId, tab, onTabChange, onSwitchStore, onListCoun
             product={product}
             fixture={fixture}
             departmentName={departmentName(product.departmentId)}
+            chain={chain}
             position={position}
             routeMeters={routeMeters}
             steps={steps}

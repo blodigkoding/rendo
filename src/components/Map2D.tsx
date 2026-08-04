@@ -648,8 +648,13 @@ export function Map2D({
           <clipPath id="plan-floor" clipPathUnits="userSpaceOnUse">
             <path d={outlinePath} />
           </clipPath>
+          {/*
+            Uskarpheten måles i kartets enheter, altså meter. Uten omregning
+            krymper den med zoomen, og skyggen blir en hard stripe langs kanten
+            i stedet for en myk skygge.
+          */}
           <filter id="plan-blur" x="-20%" y="-20%" width="140%" height="140%">
-            <feGaussianBlur stdDeviation={0.4} />
+            <feGaussianBlur stdDeviation={7 / transform.k} />
           </filter>
         </defs>
 
@@ -658,7 +663,7 @@ export function Map2D({
           <path
             className="plan__shadow"
             d={outlinePath}
-            transform="translate(0.55 0.75)"
+            transform={`translate(${3 / transform.k} ${5 / transform.k})`}
             filter="url(#plan-blur)"
           />
           <path className="plan__floor" d={outlinePath} />

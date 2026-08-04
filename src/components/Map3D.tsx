@@ -37,64 +37,248 @@ function directionFor(yaw: number) {
 /* ---------------------------------------------------------------- innredning */
 
 const PLINTH = 0.12;
-const CAP = 0.06;
+const CAP = 0.05;
+const PANEL = 0.04;
+
+/** Én boks i den sammenslåtte geometrien, med hvilken rolle den har. */
+interface Part {
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+  h: number;
+  d: number;
+  fixture: number;
+  role: 'plinth' | 'panel' | 'board' | 'cap' | 'back';
+}
 
 /**
- * Reolene tegnes som tre instansierte objekter – sokler, kropper og treplater –
- * i stedet for tre hundre enkeltbokser. Det er forskjellen på 40 og 60 bilder i
- * sekundet på en telefon.
+ * Reolene bygges som én sammenslått geometri.
+ *
+ * En reol er ikke en kloss: den har sokkel, sidevanger, bakplate og hyllene selv.
+ * Å tegne hver del som sitt eget objekt ville gitt to tusen tegnekall, så alt
+ * slås sammen til én geometri med farge per hjørne. Da koster hele butikken ett
+ * tegnekall, og hyllene ser ut som hyller.
  */
-function Fixtures({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) {
-  const plinths = useRef<THREE.InstancedMesh>(null);
-  const bodies = useRef<THREE.InstancedMesh>(null);
-  const caps = useRef<THREE.InstancedMesh>(null);
+function buildFixtureParts(plan: StorePlan): Part[] {
+  const parts: Part[] = [];
 
-  const count = plan.fixtures.length;
-  const targetFixtures = useMemo(() => new Set(targets.map((t) => t.fixture.id)), [targets]);
-  const targetDepartments = useMemo(() => new Set(targets.map((t) => t.departmentId)), [targets]);
+  plan.fixtures.forEach((f, index) => {
+    const height = f.heightCm / 100;
+    const body = Math.max(0.2, height - PLINTH - CAP);
+    const n = FACING_VECTOR[f.facing];
+    const chest = f.type === 'freezer' && f.heightCm < 120;
+    const table = f.type === 'island';
 
-  // Plassering endres bare når planen gjør det.
-  useEffect(() => {
-    const matrix = new THREE.Matrix4();
-    const place = (
-      mesh: THREE.InstancedMesh | null,
-      height: (f: (typeof plan.fixtures)[number]) => number,
-      y: (f: (typeof plan.fixtures)[number]) => number,
-      inset: number,
-    ) => {
-      if (!mesh) return;
-      plan.fixtures.forEach((f, i) => {
-        matrix.compose(
-          new THREE.Vector3(f.x + f.w / 2, y(f), f.y + f.d / 2),
-          new THREE.Quaternion(),
-          new THREE.Vector3(f.w * inset, height(f), f.d * inset),
-        );
-        mesh.setMatrixAt(i, matrix);
+    // Sokkel under alt.
+    parts.push({
+      x: f.x + f.w / 2,
+      y: PLINTH / 2,
+      z: f.y + f.d / 2,
+      w: f.w * 0.94,
+      h: PLINTH,
+      d: f.d * 0.94,
+      fixture: index,
+      role: 'plinth',
+    });
+
+    // Pall: trekarm nederst, varene stablet oppå.
+    if (f.type === 'pallet') {
+      parts.push({
+        x: f.x + f.w / 2,
+        y: 0.075,
+        z: f.y + f.d / 2,
+        w: f.w,
+        h: 0.15,
+        d: f.d,
+        fixture: index,
+        role: 'cap',
       });
-      mesh.instanceMatrix.needsUpdate = true;
-      mesh.computeBoundingSphere();
-    };
+      const stack = 3;
+      for (let level = 0; level < stack; level++) {
+        const layer = (height - 0.15) / stack;
+        const shrink = 1 - level * 0.06;
+        parts.push({
+          x: f.x + f.w / 2,
+          y: 0.15 + layer * (level + 0.5),
+          z: f.y + f.d / 2,
+          w: f.w * 0.92 * shrink,
+          h: layer * 0.88,
+          d: f.d * 0.92 * shrink,
+          fixture: index,
+          role: 'panel',
+        });
+      }
+      return;
+    }
 
-    const body = (f: (typeof plan.fixtures)[number]) =>
-      Math.max(0.1, f.heightCm / 100 - PLINTH - CAP);
+    // Kummer og bord har ikke hyller – de er åpne kasser med en kant.
+    if (chest || table) {
+      parts.push({
+        x: f.x + f.w / 2,
+        y: PLINTH + body / 2,
+        z: f.y + f.d / 2,
+        w: f.w,
+        h: body,
+        d: f.d,
+        fixture: index,
+        role: 'back',
+      });
+      parts.push({
+        x: f.x + f.w / 2,
+        y: PLINTH + body + CAP / 2,
+        z: f.y + f.d / 2,
+        w: f.w * 1.05,
+        h: CAP,
+        d: f.d * 1.05,
+        fixture: index,
+        role: 'cap',
+      });
+      return;
+    }
 
-    place(plinths.current, () => PLINTH, () => PLINTH / 2, 0.96);
-    place(bodies.current, body, (f) => PLINTH + body(f) / 2, 1);
-    place(caps.current, () => CAP, (f) => PLINTH + body(f) + CAP / 2, 1.04);
+    // Bakplate: på motsatt side av der kunden står.
+    const backAlongX = n.x !== 0;
+    parts.push({
+      x: f.x + f.w / 2 - (n.x * (f.w - PANEL)) / 2,
+      y: PLINTH + body / 2,
+      z: f.y + f.d / 2 - (n.y * (f.d - PANEL)) / 2,
+      w: backAlongX ? PANEL : f.w,
+      h: body,
+      d: backAlongX ? f.d : PANEL,
+      fixture: index,
+      role: 'back',
+    });
+
+    // Sidevanger i hver ende av seksjonen.
+    for (const side of [-1, 1]) {
+      parts.push({
+        x: backAlongX ? f.x + f.w / 2 : f.x + f.w / 2 + (side * (f.w - PANEL)) / 2,
+        y: PLINTH + body / 2,
+        z: backAlongX ? f.y + f.d / 2 + (side * (f.d - PANEL)) / 2 : f.y + f.d / 2,
+        w: backAlongX ? f.w : PANEL,
+        h: body,
+        d: backAlongX ? PANEL : f.d,
+        fixture: index,
+        role: 'panel',
+      });
+    }
+
+    // Hyllene. Nederste ligger rett over sokkelen, øverste under toppen.
+    const boards = Math.max(2, f.levels);
+    for (let level = 0; level < boards; level++) {
+      const t = level / (boards - 1);
+      parts.push({
+        x: f.x + f.w / 2,
+        y: PLINTH + 0.06 + t * (body - 0.14),
+        z: f.y + f.d / 2,
+        w: f.w * 0.96,
+        h: 0.035,
+        d: f.d * 0.96,
+        fixture: index,
+        role: 'board',
+      });
+    }
+
+    // Topplate.
+    parts.push({
+      x: f.x + f.w / 2,
+      y: PLINTH + body + CAP / 2,
+      z: f.y + f.d / 2,
+      w: f.w * 1.05,
+      h: CAP,
+      d: f.d * 1.05,
+      fixture: index,
+      role: 'cap',
+    });
+  });
+
+  return parts;
+}
+
+function Fixtures({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) {
+  const mesh = useRef<THREE.Mesh>(null);
+
+  const { geometry, parts } = useMemo(() => {
+    const list = buildFixtureParts(plan);
+    const template = new THREE.BoxGeometry(1, 1, 1);
+    const perBox = template.attributes.position.count;
+    const indexPerBox = template.index!.count;
+
+    const position = new Float32Array(list.length * perBox * 3);
+    const normal = new Float32Array(list.length * perBox * 3);
+    const color = new Float32Array(list.length * perBox * 3);
+    const index = new Uint32Array(list.length * indexPerBox);
+
+    const matrix = new THREE.Matrix4();
+    const normalMatrix = new THREE.Matrix3();
+    const vertex = new THREE.Vector3();
+    const src = template.attributes.position.array as Float32Array;
+    const srcNormal = template.attributes.normal.array as Float32Array;
+    const srcIndex = template.index!.array;
+
+    list.forEach((part, i) => {
+      matrix.makeTranslation(part.x, part.y, part.z).scale(
+        new THREE.Vector3(part.w, part.h, part.d),
+      );
+      normalMatrix.getNormalMatrix(matrix);
+      const offset = i * perBox * 3;
+      for (let v = 0; v < perBox; v++) {
+        vertex.fromArray(src, v * 3).applyMatrix4(matrix).toArray(position, offset + v * 3);
+        vertex
+          .fromArray(srcNormal, v * 3)
+          .applyMatrix3(normalMatrix)
+          .normalize()
+          .toArray(normal, offset + v * 3);
+      }
+      for (let t = 0; t < indexPerBox; t++) {
+        index[i * indexPerBox + t] = srcIndex[t] + i * perBox;
+      }
+    });
+
+    template.dispose();
+
+    const merged = new THREE.BufferGeometry();
+    merged.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    merged.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
+    merged.setAttribute('color', new THREE.BufferAttribute(color, 3));
+    merged.setIndex(new THREE.BufferAttribute(index, 1));
+    merged.computeBoundingSphere();
+
+    return { geometry: merged, parts: list };
   }, [plan]);
 
-  // Fargene endres når man velger en vare – og forteller hva slags innredning
-  // det er: kjøl og frys er kjølige og metalliske, tørrvarer varme med treplate.
+  useEffect(() => () => geometry.dispose(), [geometry]);
+
+  // Fargene forteller hva slags innredning det er, og hva som er valgt.
   useEffect(() => {
+    const attribute = geometry.getAttribute('color') as THREE.BufferAttribute;
+    const array = attribute.array as Float32Array;
+    const perBox = array.length / parts.length / 3;
+    const targetFixtures = new Set(targets.map((t) => t.fixture.id));
+    const targetDepartments = new Set(targets.map((t) => t.departmentId));
     const colour = new THREE.Color();
-    plan.fixtures.forEach((f, i) => {
+
+    parts.forEach((part, i) => {
+      const f = plan.fixtures[part.fixture];
       const isTarget = targetFixtures.has(f.id);
       const inDept = targetDepartments.has(f.departmentId);
       const cold = f.type === 'cooler' || f.type === 'freezer';
-      const base = cold ? C.cold : f.type === 'island' ? C.shelf : C.shelf;
-      const shelf = isTarget
-        ? C.ink
-        : inDept
+
+      let hex: string;
+      if (isTarget) {
+        hex = part.role === 'board' ? '#46534b' : C.ink;
+      } else if (part.role === 'cap') {
+        hex = cold ? C.coldTrim : C.wood;
+      } else if (part.role === 'plinth') {
+        hex = cold ? C.coldEdge : C.floorEdge;
+      } else if (part.role === 'back') {
+        // Bakplata står i skygge – det er den som gir dybde i hylla.
+        hex = cold ? '#c4d0d3' : '#d6d1c8';
+      } else if (part.role === 'board') {
+        hex = cold ? '#eef3f4' : '#f4f1ea';
+      } else {
+        hex = inDept
           ? cold
             ? C.coldDept
             : C.shelfDept
@@ -102,77 +286,27 @@ function Fixtures({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) 
             ? cold
               ? C.coldDim
               : C.shelfDim
-            : base;
-      bodies.current?.setColorAt(i, colour.set(shelf));
-      plinths.current?.setColorAt(i, colour.set(isTarget ? C.ink : cold ? C.coldEdge : C.floorEdge));
-      caps.current?.setColorAt(
-        i,
-        colour.set(isTarget ? C.ink : cold ? C.coldTrim : C.wood),
-      );
-    });
-    for (const mesh of [bodies.current, plinths.current, caps.current]) {
-      if (mesh?.instanceColor) mesh.instanceColor.needsUpdate = true;
-    }
-  }, [plan, targetFixtures, targetDepartments]);
+            : cold
+              ? C.cold
+              : C.shelf;
+      }
 
-  /** Glassfronten på kjøl og lokket på frysekummene, tegnet for seg. */
-  const glass = useMemo(() => {
-    return plan.fixtures
-      .filter((f) => f.type === 'cooler' || f.type === 'freezer')
-      .map((f) => {
-        const height = f.heightCm / 100;
-        const chest = f.type === 'freezer' && f.heightCm < 120;
-        const n = FACING_VECTOR[f.facing];
-        return {
-          id: f.id,
-          chest,
-          // Kummen får lokk på toppen, skapet glass i fronten.
-          position: chest
-            ? ([f.x + f.w / 2, height + 0.02, f.y + f.d / 2] as const)
-            : ([
-                f.x + f.w / 2 + (n.x * f.w) / 2,
-                height * 0.62,
-                f.y + f.d / 2 + (n.y * f.d) / 2,
-              ] as const),
-          size: chest
-            ? ([f.w * 0.92, 0.05, f.d * 0.92] as const)
-            : ([
-                n.x !== 0 ? 0.04 : f.w * 0.94,
-                height * 0.62,
-                n.x !== 0 ? f.d * 0.94 : 0.04,
-              ] as const),
-        };
-      });
-  }, [plan]);
+      colour.set(hex);
+      const offset = i * perBox * 3;
+      for (let v = 0; v < perBox; v++) {
+        array[offset + v * 3] = colour.r;
+        array[offset + v * 3 + 1] = colour.g;
+        array[offset + v * 3 + 2] = colour.b;
+      }
+    });
+
+    attribute.needsUpdate = true;
+  }, [geometry, parts, plan, targets]);
 
   return (
-    <group>
-      {glass.map((piece) => (
-        <mesh key={piece.id} position={[...piece.position]}>
-          <boxGeometry args={[...piece.size]} />
-          <meshStandardMaterial
-            color={piece.chest ? '#dbe6ea' : '#c6d5da'}
-            transparent
-            opacity={piece.chest ? 0.7 : 0.45}
-            roughness={0.25}
-            metalness={0.1}
-          />
-        </mesh>
-      ))}
-
-      <instancedMesh ref={plinths} args={[undefined, undefined, count]} castShadow receiveShadow>
-        <boxGeometry />
-        <meshStandardMaterial roughness={0.9} />
-      </instancedMesh>
-      <instancedMesh ref={bodies} args={[undefined, undefined, count]} castShadow receiveShadow>
-        <boxGeometry />
-        <meshStandardMaterial roughness={0.92} />
-      </instancedMesh>
-      <instancedMesh ref={caps} args={[undefined, undefined, count]} castShadow receiveShadow>
-        <boxGeometry />
-        <meshStandardMaterial roughness={0.75} />
-      </instancedMesh>
-    </group>
+    <mesh ref={mesh} geometry={geometry} castShadow receiveShadow>
+      <meshStandardMaterial vertexColors roughness={0.9} metalness={0} />
+    </mesh>
   );
 }
 
@@ -433,6 +567,89 @@ function Entrances({ plan }: { plan: StorePlan }) {
   );
 }
 
+/**
+ * Skilt over avdelingene, slik de henger i en butikk.
+ *
+ * Hver avdeling har sin egen farge. Selve navnet står som tekst i skjermplanet –
+ * å rendre skrift i 3D koster mer enn det smaker – men fargen på skiltet er det
+ * som gjør at man ser hvor en avdeling slutter og den neste begynner.
+ */
+function DepartmentSigns({ plan, targets }: { plan: StorePlan; targets: MapTarget[] }) {
+  const active = new Set(targets.map((t) => t.departmentId));
+
+  const signs = useMemo(() => {
+    const groups = new Map<
+      string,
+      { dept: string; minX: number; maxX: number; minZ: number; maxZ: number; top: number }
+    >();
+
+    for (const f of plan.fixtures) {
+      if (f.type === 'pallet' || f.type === 'island') continue;
+      const key = `${f.departmentId}|${f.aisle}`;
+      const g = groups.get(key) ?? {
+        dept: f.departmentId,
+        minX: Infinity,
+        maxX: -Infinity,
+        minZ: Infinity,
+        maxZ: -Infinity,
+        top: 0,
+      };
+      g.minX = Math.min(g.minX, f.x);
+      g.maxX = Math.max(g.maxX, f.x + f.w);
+      g.minZ = Math.min(g.minZ, f.y);
+      g.maxZ = Math.max(g.maxZ, f.y + f.d);
+      g.top = Math.max(g.top, f.heightCm / 100);
+      groups.set(key, g);
+    }
+
+    const order = plan.departments.map((d) => d.id);
+
+    return [...groups.entries()].map(([key, g]) => {
+      const vertical = g.maxZ - g.minZ > g.maxX - g.minX;
+      const colour = C.signs[Math.max(0, order.indexOf(g.dept)) % C.signs.length];
+      const length = Math.min(3.2, (vertical ? g.maxZ - g.minZ : g.maxX - g.minX) * 0.55);
+      return {
+        key,
+        dept: g.dept,
+        colour,
+        vertical,
+        x: (g.minX + g.maxX) / 2,
+        z: (g.minZ + g.maxZ) / 2,
+        y: g.top + 0.42,
+        length,
+      };
+    });
+  }, [plan]);
+
+  return (
+    <group>
+      {signs.map((sign) => (
+        <group key={sign.key} position={[sign.x, sign.y, sign.z]}>
+          {/* oppheng */}
+          <mesh position={[0, -0.2, 0]}>
+            <boxGeometry args={[0.04, 0.4, 0.04]} />
+            <meshStandardMaterial color="#b9b6ae" roughness={0.8} />
+          </mesh>
+          {/* selve skiltet */}
+          <mesh castShadow>
+            <boxGeometry
+              args={
+                sign.vertical ? [0.06, 0.42, sign.length] : [sign.length, 0.42, 0.06]
+              }
+            />
+            <meshStandardMaterial
+              color={sign.colour}
+              roughness={0.75}
+              opacity={targets.length && !active.has(sign.dept) ? 0.4 : 1}
+              transparent={targets.length > 0 && !active.has(sign.dept)}
+            />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
 /** Avdelingsnavn og inngang, samlet som etiketter i skjermplanet. */
 function useSceneLabels(plan: StorePlan, targets: MapTarget[]): SceneLabel[] {
   const active = new Set(targets.map((t) => t.departmentId));
@@ -476,7 +693,7 @@ function useSceneLabels(plan: StorePlan, targets: MapTarget[]): SceneLabel[] {
         text: plan.departments.find((d) => d.id === group.dept)?.name ?? group.dept,
         position: [
           vertical ? (group.minX + group.maxX) / 2 : group.minX + (group.maxX - group.minX) * near,
-          group.top + 0.35,
+          group.top + 0.95,
           vertical ? group.minZ + (group.maxZ - group.minZ) * near : (group.minZ + group.maxZ) / 2,
         ] as [number, number, number],
         muted: targets.length > 0 && !active.has(group.dept),
@@ -865,6 +1082,7 @@ function Scene({
       <Rooms plan={plan} />
       <Checkouts plan={plan} />
       <Fixtures plan={plan} targets={targets} />
+      {showLabels && <DepartmentSigns plan={plan} targets={targets} />}
       {route && route.length > 1 && <Route route={route} />}
       {origin && <OriginMarker origin={origin} />}
       {targets.map((item) => (

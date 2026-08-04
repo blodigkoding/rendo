@@ -34,6 +34,18 @@ export interface Chain {
   accent: string;
   /** Tekstfarge oppå aksentfargen. */
   onAccent: string;
+  /**
+   * Kjedens egen selvskanning i deres app, hvis de har det. Vi lenker til den –
+   * rendo finner varen, kjedens app tar betalingen.
+   */
+  scanApp?: {
+    /** Navnet kunden kjenner, f.eks. «Skann og Betal». */
+    name: string;
+    /** Appen funksjonen bor i. */
+    app: string;
+    /** Lenke å åpne. Byttes til universell lenke inn i appen når vi har den. */
+    url: string;
+  };
   /** Hvordan navnetrekket settes. */
   wordmark: {
     text: string;
@@ -75,6 +87,8 @@ export type FixtureType =
   | 'cooler'
   | 'freezer'
   | 'island'
+  /** Pallplass: varer solgt rett fra pallen, typisk drikke og kampanjer. */
+  | 'pallet'
   | 'checkout'
   | 'service';
 

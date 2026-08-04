@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { dataSource } from '../data';
-import type { Chain, Store, StorePlan } from '../data/types';
+import type { Chain, Store } from '../data/types';
 import { ChainLogo } from './ChainLogo';
 import { SearchField } from './SearchField';
 import { StoreIsoArt } from './StoreIsoArt';
@@ -13,7 +13,6 @@ export function HomePage({ onOpenStore }: Props) {
   const [query, setQuery] = useState('');
   const [stores, setStores] = useState<Store[]>([]);
   const [chains, setChains] = useState<Map<string, Chain>>(new Map());
-  const [plans, setPlans] = useState<Map<string, StorePlan>>(new Map());
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,20 +23,10 @@ export function HomePage({ onOpenStore }: Props) {
     let active = true;
     setLoading(true);
     const timer = setTimeout(() => {
-      dataSource.searchStores(query).then(async (result) => {
+      dataSource.searchStores(query).then((result) => {
         if (!active) return;
         setStores(result);
         setLoading(false);
-        // Hver butikk tegner seg selv – da trengs planen.
-        const found = await Promise.all(
-          result.map(async (store) => [store.id, await dataSource.getStorePlan(store.id)] as const),
-        );
-        if (!active) return;
-        setPlans((current) => {
-          const next = new Map(current);
-          for (const [id, plan] of found) if (plan) next.set(id, plan);
-          return next;
-        });
       });
     }, 110);
     return () => {
@@ -81,7 +70,6 @@ export function HomePage({ onOpenStore }: Props) {
           <div className="store-grid fade-in">
             {stores.map((store) => {
               const chain = chains.get(store.chainId);
-              const plan = plans.get(store.id);
               return (
                 <button
                   key={store.id}
@@ -91,7 +79,7 @@ export function HomePage({ onOpenStore }: Props) {
                   type="button"
                 >
                   <span className="store-card__art">
-                    {plan ? <StoreIsoArt plan={plan} className="store-card__iso" /> : null}
+                    <StoreIsoArt store={store} chain={chain} className="store-card__iso" />
                   </span>
                   <span className="store-card__chain">
                     {chain ? <ChainLogo chain={chain} size={14} /> : store.chain}

@@ -24,7 +24,7 @@ export function ChainLogo({
   const file = logoFor(chain.id);
 
   if (file && !failed) {
-    return (
+    const logo = (
       <img
         className="chain-logo"
         src={file}
@@ -33,6 +33,13 @@ export function ChainLogo({
         onError={() => setFailed(true)}
       />
     );
+
+    /*
+      Kjedelogoene er laget for lys bakgrunn – Rema er blå på hvitt. Står de rett
+      på kjedefargen forsvinner de. Derfor får de en hvit brikke, slik kjedenes
+      egne apper gjør det.
+    */
+    return onColor ? <span className="chain-logo__chip">{logo}</span> : logo;
   }
 
   return (

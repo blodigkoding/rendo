@@ -1,8 +1,9 @@
-import type { Fixture, Product } from '../data/types';
+import type { Chain, Fixture, Product } from '../data/types';
 import type { DirectionStep } from '../lib/directions';
 import { fixtureTypeName, formatMeters, formatWalkTime, type ShelfPosition } from '../lib/geometry';
 import { BottomSheet, type SheetSnap } from './BottomSheet';
 import { ProductImage } from './ProductImage';
+import { ScanButton } from './ScanButton';
 import {
   ArriveIcon,
   CheckIcon,
@@ -18,6 +19,7 @@ interface Props {
   product: Product;
   fixture: Fixture;
   departmentName: string;
+  chain: Chain | null;
   /** Hvor langt inn i gangen seksjonen står. */
   position: ShelfPosition;
   routeMeters: number | null;
@@ -119,6 +121,7 @@ export function ProductSheet({
   product,
   fixture,
   departmentName,
+  chain,
   position,
   routeMeters,
   steps,
@@ -223,6 +226,12 @@ export function ProductSheet({
       footer={footer}
       label={`Plassering av ${product.name}`}
     >
+      {chain?.scanApp && (
+        <div className="place place--scan">
+          <ScanButton chain={chain} product={product} />
+        </div>
+      )}
+
       <div className="place">
         <div className="place__shelf">
           <ShelfDiagram levels={fixture.levels} active={product.placement.level} large={arrived} />
